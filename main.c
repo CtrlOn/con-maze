@@ -3,10 +3,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "binio.h"
+
+#define SAVE_FILE "save.bin"
 
 // Macro for ANSI escape codes
-#define SPECIAL_TEXT(text, code) "\x1B[" #code "m" text "\x1B[0m"
+#define ANSI_ESC(text, code) "\x1B[" code "m" text "\x1B[0m"
 
+// Clear screen and getch portable implementations
 #ifdef _WIN32
 #include <conio.h>
 #define CLEAR_SCREEN() system("cls")
@@ -30,6 +34,7 @@ char getch_portable() {
 }
 #endif
 
+// Build maze here
 #define MAP_WIDTH 16
 
 char map[MAP_WIDTH][MAP_WIDTH] = {
@@ -51,6 +56,7 @@ char map[MAP_WIDTH][MAP_WIDTH] = {
     "################"
 };
 
+// Starting position
 int playerX = 1;
 int playerY = 1;
 
@@ -60,54 +66,7 @@ int victory = 0;
 int movesMade = 0;
 char *moveSequence = NULL;
 
-void addMoveToSequence(char move);
-int findData();
-void saveData();
-void loadData();
-void deleteData();
-void handleOutput();
-void handleInput();
-void handleInteractions();
-int movePlayer(char input);
-
-int main() {
-    // Intro
-    printf("\nWelcome to The Maze!\n");
-    getch_portable();
-
-    // Search for bin save file
-    if (findData()) {
-        char loadInput;
-        printf("\nSave file found! Continue? Y/N\n");
-
-        // Prompt user to load save
-        while (loadInput != 'y' && loadInput != 'n') {
-            loadInput = getch_portable();
-        }
-
-        // Load game state
-        if (loadInput == 'y') {
-            loadData();
-        }
-    }
-
-    // Loop game until victory
-    while (!victory){
-        handleOutput();
-        handleInput();
-        handleInteractions();
-    }
-
-    printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
-
-    // Remove save file
-    deleteData();
-
-    return 0;
-}
-
-// Function to resize move sequence array using realloc
-void addMoveToSequence(char move) {
+void addMoveToSequence(char move) { // For faster loading, sys calls every 10 moves
     if (movesMade == 0) {
         moveSequence = (char*)malloc(10 * sizeof(char));
     }
@@ -123,42 +82,47 @@ void addMoveToSequence(char move) {
     movesMade++;
 }
 
-int findData(){
-    FILE *file = fopen("save.bin", "rb");
-    if (file) {
-        fclose(file);
-        return 1;
+void handleInteractions(){
+    if (map[playerY][playerX] == 'W') {
+        victory = 1;
     }
-    return 0;
-}
-
-void saveData(){
-    FILE *file = fopen("save.bin", "wb");
-    fwrite(&movesMade, sizeof(int), 1, file);
-    fwrite(moveSequence, sizeof(char), movesMade, file);
-    fclose(file);
-}
-
-void loadData(){
-    FILE *file = fopen("save.bin", "rb");
-    if (file) {
-        int loadedMoves;
-        fread(&loadedMoves, sizeof(int), 1, file);
-        char *loadedSequence = (char*)malloc(loadedMoves * sizeof(char));
-        fread(loadedSequence, sizeof(char), loadedMoves, file);
-        fclose(file);
-        for (int i = 0; i < loadedMoves; i++) {
-            movePlayer(loadedSequence[i]);
-            handleInteractions();
-            printf("Replaying move %d/%d\r", i + 1, loadedMoves);
-            fflush(stdout);
-        }
-        free(loadedSequence);
+    else if (map[playerY][playerX] == 'K') {
+        hasKey = 1;
     }
 }
 
-void deleteData(){
-    remove("save.bin");
+int movePlayer(char input) {
+    int valid = 0;
+    switch (input) {
+        case 'w': // UP
+            if (map[playerY - 1][playerX] != '#' && (map[playerY - 1][playerX] != '@' || hasKey)) {
+                playerY--;
+                valid = 1;
+            }
+            break;
+        case 's': // DOWN
+            if (map[playerY + 1][playerX] != '#' && (map[playerY + 1][playerX] != '@' || hasKey)) {
+                playerY++;
+                valid = 1;
+            }
+            break;
+        case 'a': // LEFT
+            if (map[playerY][playerX - 1] != '#' && (map[playerY][playerX - 1] != '@' || hasKey)) {
+                playerX--;
+                valid = 1;
+            }
+            break;
+        case 'd': // RIGHT
+            if (map[playerY][playerX + 1] != '#' && (map[playerY][playerX + 1] != '@' || hasKey)) {
+                playerX++; 
+                valid = 1;
+            }
+            break;
+    }
+    if (valid) {
+        addMoveToSequence(input);
+    }
+    return !valid;
 }
 
 void handleOutput(){
@@ -166,7 +130,7 @@ void handleOutput(){
     CLEAR_SCREEN();
 
     // Print game info
-    printf("Moves made: %d\tKey: %s\n\n", movesMade, hasKey ? "o+" : "__");
+    printf("Moves made: %d\tKey: %s\n\n", movesMade, hasKey ? ANSI_ESC("o+", "92") : ANSI_ESC("__", "92"));
 
     // Print map
     for (int i = 0; i < MAP_WIDTH; i++) {
@@ -181,26 +145,26 @@ void handleOutput(){
                         printf("  ");
                         break;
                     case '#': // Wall
-                        printf("##");
+                        printf(ANSI_ESC("##", "107"));
                         break;
                     case '@': // Door
                         if (hasKey) {
                             printf("  ");
                         }
                         else{
-                            printf(SPECIAL_TEXT("@@", 2));
+                            printf(ANSI_ESC("@@", "42"));
                         }
                         break;
                     case 'K': // Key
                         if (!hasKey) {
-                            printf("o+");
+                            printf(ANSI_ESC("o+", "92;1"));
                         }
                         else {
-                            printf("__");
+                            printf("  ");
                         }
                         break;
                     case 'W': // Victory
-                        printf("[]");
+                        printf(ANSI_ESC("[]", "103;95"));
                         break;
                 }
             }
@@ -219,17 +183,17 @@ void handleInput() {
         if (input == 'q') {
             printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
             // Prompt user to save progress
-            char saveInput;
+            char saveInput = 0;
             while (saveInput != 'y' && saveInput != 'n') {
                 saveInput = getch_portable();
             }
 
             // Save game state
             if (saveInput == 'y') {
-                FILE *saveFile = fopen("save.bin", "wb");
-                if (saveFile) {
-                    saveData();
+                if (saveData(SAVE_FILE, movesMade, moveSequence)) {
                     printf("\nGame saved successfully!\n");
+                } else {
+                    printf("\nFailed to save game.\n");
                 }
             }
             exit(0);
@@ -240,41 +204,48 @@ void handleInput() {
     }
 }
 
-void handleInteractions(){
-    if (map[playerY][playerX] == 'W') {
-        victory = 1;
-    }
-    else if (map[playerY][playerX] == 'K') {
-        hasKey = 1;
-    }
-}
+int main() {
+    // Intro
+    printf("\nWelcome to The Maze!\n");
+    getch_portable();
 
-int movePlayer(char input) {
-    switch (input) {
-        case 'w': // UP
-            if (map[playerY - 1][playerX] != '#' && (map[playerY - 1][playerX] != '@' || hasKey)) {
-                playerY--;
-            }
-            break;
-        case 's': // DOWN
-            if (map[playerY + 1][playerX] != '#' && (map[playerY + 1][playerX] != '@' || hasKey)) {
-                playerY++;
-            }
-            break;
-        case 'a': // LEFT
-            if (map[playerY][playerX - 1] != '#' && (map[playerY][playerX - 1] != '@' || hasKey)) {
-                playerX--;
-            }
-            break;
-        case 'd': // RIGHT
-            if (map[playerY][playerX + 1] != '#' && (map[playerY][playerX + 1] != '@' || hasKey)) {
-                playerX++; 
-            }
-            break;
-        default:
-            return 1; // Invalid input
-    }
-    addMoveToSequence(input);
-    return 0; // Valid move
+    // Search for bin save file
+    if (findData(SAVE_FILE)) {
+        char loadInput = 0;
+        printf("\nSave file found! Continue? Y/N\n");
 
+        // Prompt user to load save
+        while (loadInput != 'y' && loadInput != 'n') {
+            loadInput = getch_portable();
+        }
+
+        // Load game state
+        if (loadInput == 'y') {
+            int loadedMoves = 0;
+            char *loadedSequence = NULL;
+            if (loadData(SAVE_FILE, &loadedMoves, &loadedSequence)) {
+                for (int i = 0; i < loadedMoves; i++) {
+                    movePlayer(loadedSequence[i]);
+                    handleInteractions();
+                    printf("Replaying move %d/%d\r", i + 1, loadedMoves);
+                    fflush(stdout);
+                }
+                free(loadedSequence);
+            }
+        }
+    }
+
+    // Loop game until victory
+    while (!victory){
+        handleOutput();
+        handleInput();
+        handleInteractions();
+    }
+
+    printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
+
+    // Remove save file
+    deleteData(SAVE_FILE);
+
+    return 0;
 }
