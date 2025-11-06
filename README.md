@@ -13,6 +13,8 @@
 - [x] Save file system
 - [x] ANSI Colors for extra accesibilty
 - [ ] Multiple rooms
+- [x] Error logging
+- [ ] Leaderboard
   
 ## Usage
   

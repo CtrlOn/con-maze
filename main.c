@@ -3,9 +3,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "binio.h"
+#include "logio.h"
 
 #define SAVE_FILE "save.bin"
+#define LOG_FILE "runtime.log"
 
 // Macro for ANSI escape codes
 #define ANSI_ESC(text, code) "\x1B[" code "m" text "\x1B[0m"
@@ -13,9 +16,9 @@
 // Clear screen and getch portable implementations
 #ifdef _WIN32
 #include <conio.h>
-#include <windows.h>   // <-- add to provide Sleep
+#include <windows.h>
 
-// usleep replacement on Windows
+// usleep replacement for Windows
 static inline int usleep(unsigned int usec) {
     Sleep((usec + 999) / 1000);
     return 0;
@@ -25,9 +28,18 @@ static inline int usleep(unsigned int usec) {
 char getch_portable() {
     return getch();
 }
-#else
+
+// Drain pending console input using the Windows API.
+static void flushInput(void) {
+    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+}
+
+#else // POSIX
 #include <termios.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/time.h>
 #define CLEAR_SCREEN() printf("\033[2J\033[H")
 char getch_portable() {
     struct termios oldt, newt;
@@ -40,7 +52,12 @@ char getch_portable() {
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
     return ch;
 }
-#endif
+
+// Drain pending stdin bytes using tcflush (portable POSIX).
+static void flushInput(void) {
+    tcflush(STDIN_FILENO, TCIFLUSH);
+}
+#endif // _WIN32
 
 // Tiles 
 // Get color codes from here https://i.sstatic.net/9UVnC.png
@@ -77,8 +94,10 @@ char map[MAP_WIDTH][MAP_WIDTH] = {
 int playerX = 1;
 int playerY = 1;
 
+// Global flags
 int hasKey = 0;
 int victory = 0;
+int loading = 0;
 
 int movesMade = 0;
 char *moveSequence = NULL;
@@ -92,6 +111,7 @@ void addMoveToSequence(char move) { // For faster loading, sys calls every 10 mo
     }
     if (!moveSequence) {
         printf("Failed to allocate 10 bytes! The program will now exit.\n");
+        log_error("Failed to allocate memory for move sequence.");
         exit(1);
     }
 
@@ -102,9 +122,11 @@ void addMoveToSequence(char move) { // For faster loading, sys calls every 10 mo
 void handleInteractions(){
     if (map[playerY][playerX] == 'W') {
         victory = 1;
+        log_info("Goal was reached!");
     }
     else if (map[playerY][playerX] == 'K') {
         hasKey = 1;
+        log_info("Key was picked up!");
     }
 }
 
@@ -197,6 +219,7 @@ void handleInput() {
         char input = getch_portable();
         if (input == 'q') {
             printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
+            log_info("User opted to quit the game.");
             // Prompt user to save progress
             char saveInput = 0;
             while (saveInput != 'y' && saveInput != 'n') {
@@ -205,10 +228,13 @@ void handleInput() {
 
             // Save game state
             if (saveInput == 'y') {
+                log_info("User opted to save the game.");
                 if (saveData(SAVE_FILE, movesMade, moveSequence)) {
                     printf("\nGame saved successfully!\n");
+                    log_info("Success; saved %d moves", movesMade);
                 } else {
                     printf("\nFailed to save game.\n");
+                    log_error("Failed to save game data to file.");
                 }
             }
             exit(0);
@@ -220,6 +246,9 @@ void handleInput() {
 }
 
 int main() {
+    // Initialize logging
+    log_start(LOG_FILE);
+
     // Intro
     printf("\nWelcome to The Maze!\n");
     getch_portable();
@@ -236,17 +265,24 @@ int main() {
 
         // Load game state
         if (loadInput == 'y') {
+            log_info("User opted to load saved game.");
+            loading = 1;
             int loadedMoves = 0;
             char *loadedSequence = NULL;
             if (loadData(SAVE_FILE, &loadedMoves, &loadedSequence)) {
                 for (int i = 0; i < loadedMoves; i++) {
-                    movePlayer(loadedSequence[i]);
+                    int valid = movePlayer(loadedSequence[i]);
+                    if (!valid) {
+                        log_warn("Save file contains invalid moves! It might be old or corrupted. Key: %c", loadedSequence[i]);
+                    }
                     handleInteractions();
                     printf("Replaying move %d/%d\r", i + 1, loadedMoves);
                     fflush(stdout);
                 }
                 free(loadedSequence);
             }
+            log_info("Success; loaded %d moves", loadedMoves);
+            loading = 0;
         }
     }
 
@@ -270,11 +306,13 @@ int main() {
     }
 
     // Wait for final input
-    while (getch_portable());
-    while (!getch_portable());
+    // Drain any accidental keypresses produced during the animation,
+    // then block once waiting for a fresh intentional keypress.
+    flushInput();
+    (void)getch_portable();
 
     // Remove save file
     deleteData(SAVE_FILE);
 
-    return 0;
+    exit(0);
 }
