@@ -34,6 +34,15 @@ char getch_portable() {
 }
 #endif
 
+// Tiles 
+// Get color codes from here https://i.sstatic.net/9UVnC.png
+#define TILE_PLAYER ANSI_ESC("()", "94;44")
+#define TILE_VOID   ANSI_ESC("  ", "90;40")
+#define TILE_WALL   ANSI_ESC("##", "37;100")
+#define TILE_DOOR   ANSI_ESC("@@", "92;42")
+#define TILE_KEY    ANSI_ESC("o+", "92;40")
+#define TILE_GOAL   ANSI_ESC("[]", "93;43")
+
 // Build maze here
 #define MAP_WIDTH 16
 
@@ -130,49 +139,47 @@ void handleOutput(){
     CLEAR_SCREEN();
 
     // Print game info
-    printf("Moves made: %d\tKey: %s\n\n", movesMade, hasKey ? ANSI_ESC("o+", "92") : ANSI_ESC("__", "92"));
+    printf("Moves made: %d\tKey: %s\n\n", movesMade, hasKey ? TILE_KEY : ANSI_ESC("__", "92"));
 
     // Print map
     for (int i = 0; i < MAP_WIDTH; i++) {
         for (int j = 0; j < MAP_WIDTH; j++) {
             if (i == playerY && j == playerX) {
-                printf("()");
+                printf(TILE_PLAYER);
             }
             else {
                 // Map blocks are 2 characters wide for justification
                 switch (map[i][j]) {
                     case ' ': // Void
-                        printf("  ");
+                        printf(TILE_VOID);
                         break;
                     case '#': // Wall
-                        printf(ANSI_ESC("##", "107"));
+                        printf(TILE_WALL);
                         break;
                     case '@': // Door
                         if (hasKey) {
-                            printf("  ");
+                            printf(TILE_VOID);
                         }
                         else{
-                            printf(ANSI_ESC("@@", "42"));
+                            printf(TILE_DOOR);
                         }
                         break;
                     case 'K': // Key
                         if (!hasKey) {
-                            printf(ANSI_ESC("o+", "92;1"));
+                            printf(TILE_KEY);
                         }
                         else {
-                            printf("  ");
+                            printf(TILE_VOID);
                         }
                         break;
-                    case 'W': // Victory
-                        printf(ANSI_ESC("[]", "103;95"));
+                    case 'W': // Goal
+                        printf(TILE_GOAL);
                         break;
                 }
             }
         }
         printf("\n");
     }
-
-    printf("\n\nUse WASD to move, Q to quit.\n");
 }
 
 void handleInput() {
@@ -238,11 +245,25 @@ int main() {
     // Loop game until victory
     while (!victory){
         handleOutput();
+        printf("\n\nUse WASD to move, Q to quit.\n");
         handleInput();
         handleInteractions();
     }
 
-    printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
+    // Victory animation
+    playerX = playerY = -1; // Move player off map during animation
+    for (int i = 0; i < MAP_WIDTH; i++) {
+        for (int j = 0; j < MAP_WIDTH; j++) {
+            map[i][j] = '#';
+        }
+        handleOutput();
+        printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade); // Victory message replaces movement instructions
+        usleep(100000); // 100 ms delay
+    }
+
+    // Wait for final input
+    while (getch_portable());
+    while (!getch_portable());
 
     // Remove save file
     deleteData(SAVE_FILE);
