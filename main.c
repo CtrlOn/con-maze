@@ -13,6 +13,14 @@
 // Clear screen and getch portable implementations
 #ifdef _WIN32
 #include <conio.h>
+#include <windows.h>   // <-- add to provide Sleep
+
+// usleep replacement on Windows
+static inline int usleep(unsigned int usec) {
+    Sleep((usec + 999) / 1000);
+    return 0;
+}
+
 #define CLEAR_SCREEN() system("cls")
 char getch_portable() {
     return getch();
