@@ -187,7 +187,7 @@ void loadLevel(){
     }
     roomWidth = width;
 
-    // Find START marker
+    // Find BEGIN marker
     int in_rooms = 0;
     char **tileLines = NULL;
     size_t tileCount = 0, tileCap = 0;
@@ -201,7 +201,7 @@ void loadLevel(){
         while (end > p && (end[-1] == '\n' || end[-1] == '\r' || isspace((unsigned char)end[-1]))) end--;
         *end = '\0';
         if (!in_rooms) {
-            if (strcmp(p, "START") == 0) {
+            if (strcmp(p, "BEGIN") == 0) {
                 in_rooms = 1;
             }
             continue;
@@ -219,7 +219,7 @@ void loadLevel(){
     fclose(f);
 
     if (tileCount == 0) {
-        log_error("No room data found between START and END.");
+        log_error("No room data found between BEGIN and END.");
         exit(1);
     }
 
