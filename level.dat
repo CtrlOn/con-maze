@@ -1,25 +1,33 @@
-// Welcome to level builder
-// use unicode symbols to build levels
-// ------------------------------------------------------------------------------------------------
-// SYMBOL       HAS ID?     TILE        INFO
-// ------------------------------------------------------------------------------------------------
-// '#'          No          Wall        Impassable
-// '&'          Yes         Door        Impassable until cleared
-// '!'          Yes         Key         Clears doors of same id, when collected
-// ' '          No          Void        Passable
-// '^'          Yes         Passage     Sends player to passage with same id (must be 2 per id)
-// '@'          No          Start       Player start, becomes void
-// '$'          No          Goal        Victory upon reaching
-// a-zA-Z1-9    No          Text        Will be displayed, passable
-// ------------------------------------------------------------------------------------------------
-// NOTE: id's are placed outside of the right wall and separated by space (order matters)
-// TIP: use insert mode to build rooms
+; Welcome to level builder
+; use unicode symbols to build levels
+; ------------------------------------------------------------------------------------------------
+; SYMBOL       METADATA    TILE        INFO
+; ------------------------------------------------------------------------------------------------
+; '#'          No          Wall        Impassable
+; '&'          Yes         Door        Impassable until unlock
+; '!'          Yes         Key         Collectible, unlocks doors of same ID
+; ' '          No          Void        Passable
+; '^'          Yes         Passage     Sends player to passage with same ID (must be 2 per ID)
+; '@'          No          Start       Player start, passable
+; '$'          No          Goal        Victory upon reaching
+; a-zA-Z1-9    No          Text        Display only, passable
+; ------------------------------------------------------------------------------------------------
+; ID's are placed in metadata field, beyond the right side of room, ORDER MATTERS!
+; Doors, keys, start has residue details (they act like Text)
+; When player enters passage, it appears on top of next passage, to go back it will need to step off and enter back, make sure to leave room
+; Do not let player escape map, case unhandled
+; TIP: use insert mode to build rooms
 
-// Level settings
-20 // Width
-// Rooms
+; Level settings:
+WIDTH 20
+
+; Rooms:
+; -------------------------------------
+;         <- Tiles | Metadata ->
+; -------------------------------------
+START
 ####################
-#           #      #
+# Good Luck #      #
 # ######## ### ### #
 #  #       # #   # #
 # ###  # #   # #   #
@@ -34,18 +42,18 @@
 #### ## # ###&#### # 0
 #    #      #      #
 # #### #### #### # #
-# & ^# #  # &   !# # 0 1 0 0
+# &^#  #  # &   !# # 0 1 0 0
 # #### #### ###### #
-#     Have fun     #
+#                  #
 ####################
 ####################
 #    !    # #      # 6
-# # ### #   # # #  #
-# # #^# # # # # #### 2
-# # & & # #   #    # 6 6
+# ##### #   # # #  #
+# # ^ # # # # # #### 2
+# & # & # #   #    # 6 6
 # ####### # ###### #
 #         #  #     #
-# ############# ## #
+#&############# ## # 2
 #         #      # #
 # ####### # #&# ## # 6
 # #     #   #^#    # 0
@@ -60,21 +68,22 @@
 ####################
 ####################
 #                  #
-#  ######### Nearly#
-#  # ^ #!!!# There # 2 9 10 11
-#  #   #!!!#       # 12 13 14
-#  #   #&&&#####   # 15 15 15
-#  #       &   #   # 9
-#  #       &   #   # 9
-#  #       &   #   # 9
-#  #   #   #&&&#   # 10 10 10
-#  #   #   #&&&#   # 11 11 11
-#  # ! # ! #&&&#   # 7 8 12 12 12
-#  #   #   #&&&#   # 13 13 13
-#  #&&&#&&&#&&&#   # 8 8 8 7 7 7 14 14 14
-#  #   #   #   #   #
-#  #   # ! # ! #   # 15 2
-#  #   #   #   #   #
-#  #############   #
+# ######### Nearly #
+# # ^ #!!!# There  # 2 9 10 11
+# #   #!!!#        # 12 13 14
+# #   #&&&#####    # 15 15 15
+# #       &   #    # 9
+# #       &   #    # 9
+# #       &   #    # 9
+# #   #   #&&&#    # 10 10 10
+# #   #   #&&&#    # 11 11 11
+# # ! # ! #&&&#    # 7 8 12 12 12
+# #   #   #&&&#    # 13 13 13
+# #&&&#&&&#&&&#    # 8 8 8 7 7 7 14 14 14
+# #   #   #   #    #
+# #   # ! # ! #    # 15 2
+# #   #   #   #    #
+# #############    #
 #                  #
 ####################
+END
