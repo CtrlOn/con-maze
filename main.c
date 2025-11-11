@@ -461,7 +461,7 @@ void handleOutput(){
                 printf(TILE_PLAYER);
             }
             else {
-                if (map[playerR][i][j] != -2) {// Not error
+                if (metadata[playerR][i][j] != -2) {// Not error
                     switch (map[playerR][i][j]) {
                         case CHAR_VOID:
                             printf(TILE_VOID);
