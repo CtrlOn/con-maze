@@ -31,7 +31,7 @@
 ```ansi
 Moves made:    0          Position:  8,  7,  0
 
-######################################## [2;41mtest[0m
+########################################
 ##  G o o d   L u c k   ##            ##
 ##  ################  ######  ######  ##
 ##    ##              ##  ##      ##  ##
@@ -106,8 +106,8 @@ While technically it is possible to store players position, keys collected and e
 ## Level building
 
 File `level.dat` contains information about level.  
-It can be edited with a text editor.
-The way it works is explained in itself.
+It can be edited with a text editor.  
+The way it works is explained inside.
 
 ### level.dat
 ```ansi
