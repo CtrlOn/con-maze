@@ -5,7 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include "binio.h"
-#include "logio.h"
+#include "loglib.h"
 
 #define SAVE_FILE "save.bin"
 #define LOG_FILE "runtime.log"
