@@ -61,12 +61,14 @@ static void flushInput(void) {
 
 // Tiles 
 // Get color codes from here https://i.sstatic.net/9UVnC.png
-#define TILE_PLAYER ANSI_ESC("()", "94;44")
-#define TILE_VOID   ANSI_ESC("  ", "90;40")
-#define TILE_WALL   ANSI_ESC("##", "37;100")
-#define TILE_DOOR   ANSI_ESC("@@", "92;42")
-#define TILE_KEY    ANSI_ESC("o+", "92;40")
-#define TILE_GOAL   ANSI_ESC("[]", "93;43")
+#define TILE_PLAYER     ANSI_ESC("()", "94;44")
+#define TILE_VOID       ANSI_ESC("  ", "90;40")
+#define TILE_WALL       ANSI_ESC("##", "37;100")
+#define TILE_DOOR       ANSI_ESC("##", "92;42")
+#define TILE_KEY        ANSI_ESC("o+", "92;40")
+#define TILE_GOAL       ANSI_ESC("[]", "93;43")
+#define TILE_PASSAGE    ANSI_ESC("[]", "92;42")
+#define TILE_SYMBOL(s)  ANSI_ESC(s " ", "90;40")
 
 // Build maze here
 #define MAP_WIDTH 16
