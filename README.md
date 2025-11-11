@@ -211,3 +211,20 @@ END
 - Unfinished row will autofill with `Wall`s and log warning
 - Missing metadata will cause fatal error
 - Excess metadata will ignore last and log warning
+
+### Minimal example
+```ansi
+WIDTH 5
+START
+#####
+#@ !# 0
+#&&&# 0 0 0
+#^  # 0
+#####
+#####
+#$  #
+#&&&# 1 1 1
+#^ !# 0 1
+#####
+END
+```
