@@ -23,14 +23,6 @@
 #include <conio.h>
 #include <windows.h>
 
-// Some toolchains (older MinGW, etc.) may not expose
-//  ENABLE_VIRTUAL_TERMINAL_PROCESSING. Provide a fallback
-//  value so code compiles. The value 0x0004 matches the
-//  value used in modern Windows SDKs.
-#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
-#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
-#endif
-
 // usleep replacement for Windows
 static inline int usleep(unsigned int usec) {
     Sleep((usec + 999) / 1000);
