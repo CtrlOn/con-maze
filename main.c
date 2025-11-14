@@ -31,16 +31,6 @@
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
 #endif
 
-// enable VT processing so ANSI escapes work on Windows consoles (best-effort)
-static void enable_vt_mode(void) {
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (hOut == INVALID_HANDLE_VALUE) return;
-    DWORD mode = 0;
-    if (!GetConsoleMode(hOut, &mode)) return;
-    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(hOut, mode);
-}
-
 // usleep replacement for Windows
 static inline int usleep(unsigned int usec) {
     Sleep((usec + 999) / 1000);
@@ -554,7 +544,7 @@ int main() {
     // Load level
     loadLevel();
 
-    // Search for bin save file
+    // Ask if user wants to 'continue' or 'new game'
     if (findData(SAVE_FILE)) {
         char loadInput = 0;
         printf("\nSave file found! Continue? Y/N\n");
@@ -610,7 +600,7 @@ int main() {
             map[playerR][i][j] = CHAR_WALL;
             handleOutput();
             printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade); // Victory message replaces movement instructions
-            usleep(20000); // 20 ms delay
+            usleep(8000); // 8 ms delay
         }
     }
 
