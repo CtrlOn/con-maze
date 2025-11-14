@@ -70,11 +70,22 @@ static void flushInput(void) {
 }
 #endif
 
+#define ASCII_LOGO \
+ANSI_ESC("   ******    *******   ****     **", "96")ANSI_ESC("      ", "97")ANSI_ESC(" ****     ****     **     ******** ********\n", "94") \
+ANSI_ESC("  **////**  **/////** /**/**   /**", "96")ANSI_ESC("      ", "97")ANSI_ESC("/**/**   **/**    ****   //////** /**///// \n", "94") \
+ANSI_ESC(" **    //  **     //**/**//**  /**", "96")ANSI_ESC("      ", "97")ANSI_ESC("/**//** ** /**   **//**       **  /**      \n", "94") \
+ANSI_ESC("/**       /**      /**/** //** /**", "96")ANSI_ESC(" *****", "97")ANSI_ESC("/** //***  /**  **  //**     **   /******* \n", "94") \
+ANSI_ESC("/**       /**      /**/**  //**/**", "96")ANSI_ESC("///// ", "97")ANSI_ESC("/**  //*   /** **********   **    /**////  \n", "94") \
+ANSI_ESC("//**    **//**     ** /**   //****", "96")ANSI_ESC("      ", "97")ANSI_ESC("/**   /    /**/**//////**  **     /**      \n", "94") \
+ANSI_ESC(" //******  //*******  /**    //***", "96")ANSI_ESC("      ", "97")ANSI_ESC("/**        /**/**     /** ********/********\n", "94") \
+ANSI_ESC("  //////    ///////   //      /// ", "96")ANSI_ESC("      ", "97")ANSI_ESC("//         // //      // //////// //////// \n", "94") 
+
 #define UP [playerR][playerY - 1][playerX]
 #define DOWN [playerR][playerY + 1][playerX]
 #define LEFT [playerR][playerY][playerX - 1]
 #define RIGHT [playerR][playerY][playerX + 1]
 #define HERE [playerR][playerY][playerX]
+//TODO: define gui
 
 // ------------------------------------------------------------------------------------------------
 // SYMBOL       METADATA    TILE        INFO
@@ -118,6 +129,15 @@ static void flushInput(void) {
 #define TILE_ERROR          ANSI_ESC("??", "30;105") // Shows up when flagged (id = -2)
 #define TILE_SYMBOL         ANSI_ESC("%c ", "90;40") // For text symbols
 
+// App state variables
+int atMenuGUI = 1; // is user in main menu?
+int isGameLoaded = 0; // is a game running?
+
+// GUI state variables
+int cursorGUI = 0; // which selection is user at
+int submitGUI = 0; // is user submission pending?
+
+// Game state variables
 int roomWidth;
 int roomCount;
 char*** map;
@@ -125,14 +145,14 @@ int*** metadata;
 int playerX;
 int playerY;
 int playerR;
-
-int victory = 0;
-int loading = 0;
-int atUI = 0;
 int movesMade = 0;
 char *moveSequence = NULL;
 
-void loadLevel(){
+// Game state flags
+int victory = 0;
+int loading = 0;
+
+void loadGame(/*TODO: from where*/){
     log_info("Loading level from %s", LEVEL_FILE);
     FILE *f = fopen(LEVEL_FILE, "r");
     if (!f) {
@@ -325,7 +345,15 @@ void loadLevel(){
 
     log_info("Loaded level: WIDTH=%d, ROOM_COUNT=%d", roomWidth, roomCount);
 }
- 
+
+void unloadGame(){
+    // free all shit that loadgame allocates and reset flags
+}
+
+void FetchLocalData(){
+    // read files around and put info in app state vars
+}
+
 void addMoveToSequence(char move) { // For faster loading, sys calls every 10 moves
     if (movesMade == 0) {
         moveSequence = (char*)malloc(10 * sizeof(char));
@@ -438,8 +466,7 @@ void handleOutput(){
     // Print game info
     if (!victory){
         printf("Moves made: %d     Position: %2d, %2d, %2d   \n\n", movesMade, playerX, playerY, playerR);
-    }
-    else {
+    } else {
         printf("Moves made: %d\n\n", movesMade);// Position will stay due to lack of redraw
     }
 
@@ -448,8 +475,7 @@ void handleOutput(){
         for (int j = 0; j < roomWidth; j++) {
             if (i == playerY && j == playerX) {
                 printf(TILE_PLAYER);
-            }
-            else {
+            } else {
                 if (metadata[playerR][i][j] != -2) {// Not error
                     switch (map[playerR][i][j]) {
                         case CHAR_VOID:
@@ -459,20 +485,16 @@ void handleOutput(){
                             printf(TILE_WALL);
                             break;
                         case CHAR_DOOR:
-                            if (metadata[playerR][i][j] != -1) {// Not open
+                            if (metadata[playerR][i][j] != -1)// Not open
                                 printf(TILE_DOOR);
-                            }
-                            else{
+                            else
                                 printf(TILE_DOOR_RESIDUE);
-                            }
                             break;
                         case CHAR_KEY:
-                            if (metadata[playerR][i][j] != -1) {// Not collected
+                            if (metadata[playerR][i][j] != -1)// Not collected
                                 printf(TILE_KEY);
-                            }
-                            else {
+                            else
                                 printf(TILE_KEY_RESIDUE);
-                            }
                             break;
                         case CHAR_GOAL:
                             printf(TILE_GOAL);
@@ -487,15 +509,14 @@ void handleOutput(){
                             printf(TILE_SYMBOL, map[playerR][i][j]);
                             break;
                     }
-                }
-                else {
+                } else {
                     printf(TILE_ERROR);
                 }
             }
         }
         printf("\n");
     }
-
+    printf("\n\nUse WASD to move, Q to quit.\n");
     SHOW_CURSOR();
 }
 
@@ -504,36 +525,211 @@ void handleInput() {
     int awaitingInput = 1;
     while (awaitingInput) {
         char input = getch_portable();
-        if (!atUI){
-            if (input == 'q') {
-                printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
-                log_info("User opted to quit the game.");
-                // Prompt user to save progress
-                char saveInput = 0;
-                while (saveInput != 'y' && saveInput != 'n') {
-                    saveInput = getch_portable();
-                }
+        if (input == 'q') {
+            atMenuGUI = 1; // Q throws into menu
+            cursorGUI = 1; // Default selection is first
+            
+        } else {
+            awaitingInput = movePlayer(input);
+        }
+    }
+}
 
-                // Save game state
-                if (saveInput == 'y') {
-                    log_info("User opted to save the game.");
-                    if (saveData(SAVE_FILE, movesMade, moveSequence)) {
-                        printf("\nGame saved successfully!\n");
-                        log_info("Success; saved %d moves", movesMade);
-                    } else {
-                        printf("\nFailed to save game.\n");
-                        log_error("Failed to save game data to file.");
+void awaitInputGUI() {
+    // Loop until valid input
+    char input;
+retry:
+    flushInput();
+    input = getch_portable();
+    switch (input) {
+        case 'w': // up
+            cursorGUI--;
+            break;
+        case 's': // down
+            cursorGUI++;
+            break;
+        case '\n':
+            submitGUI = 1;
+            break;
+        default:
+            if (input >= '0' && input <= '9')
+                cursorGUI = input - '0';
+            else
+                goto retry;
+            break;
+    }
+}
+
+void renderGUI(int padding, int choices, char* title, char **options){
+    HOME_CURSOR();
+    HIDE_CURSOR();
+
+    // Calculate width of box based on title length
+    int titleLength = (int)strlen(title) + 4 * (padding + 1);
+
+    // Title (top border)
+    for (int i = 0; i < padding; i++)
+        printf(ANSI_ESC("##", "37;100"));
+    printf(ANSI_ESC("  %s  ", "34;100"), title);
+    for (int i = 0; i < padding; i++)
+        printf(ANSI_ESC("##", "37;100"));
+    printf("\n");
+
+    // Free space before options
+    printf(ANSI_ESC("##", "37;100"));
+    printf("\033[%d;%dH", 2, titleLength - 1);
+    printf(ANSI_ESC("##\n", "37;100"));
+    
+    // Options
+    for (int i = 0; i < choices; i++) {
+        // Left Border piece
+        printf(ANSI_ESC("##", "37;100"));
+        // The option
+        if (i + 1 == cursorGUI) {
+            printf(ANSI_ESC(" > %d. %s < ", "94"), i + 1, options[i]);
+        } else {
+            printf(ANSI_ESC("   %d. %s   ", "34"), i + 1, options[i]);
+        }
+        // Right Border piece
+        printf("\033[%d;%dH", i + 3, titleLength - 1);
+        printf(ANSI_ESC("##\n", "37;100"));
+    }
+
+    // Free space after options
+    printf(ANSI_ESC("##", "37;100"));
+    printf("\033[%d;%dH", choices + 3, titleLength - 1);
+    printf(ANSI_ESC("##\n", "37;100"));
+
+    // Bottom Border
+    for (int i = 1; i < titleLength; i += 2)
+        printf(ANSI_ESC("##", "37;100"));
+
+    // This writes either 1 or 2 chars
+    printf("\033[%d;%dH", choices + 4, titleLength - 1);
+    printf(ANSI_ESC("##", "37;100"));
+
+    // Info about usage
+    printf(ANSI_ESC("\nUse W/S, arrows or numpad to navigate.", "90"));
+    printf(ANSI_ESC("\nEnter to select.", "90"));
+
+    SHOW_CURSOR();
+}
+
+void handleGUI() {
+    if (isGameLoaded) {
+        int choices = 3;
+        cursorGUI = (cursorGUI + choices - 1) % choices + 1;
+        if (submitGUI){
+            submitGUI = 0;
+            switch (cursorGUI){
+                case 1:// back to game
+                    atMenuGUI = 0;
+                break;
+                case 2:// restart
+                    //TODO: unload+load game
+                break;
+                case 3:// quit
+                    //TODO: prompt to save
+                    /*
+                    printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
+                    log_info("User opted to quit the game.");
+                    // Prompt user to save progress
+                    char saveInput = 0;
+                    while (saveInput != 'y' && saveInput != 'n') {
+                        saveInput = getch_portable();
+                    }
+
+                    // Save game state
+                    if (saveInput == 'y') {
+                        log_info("User opted to save the game.");
+                        if (saveData(SAVE_FILE, movesMade, moveSequence)) {
+                            printf("\nGame saved successfully!\n");
+                            log_info("Success; saved %d moves", movesMade);
+                        } else {
+                            printf("\nFailed to save game.\n");
+                            log_error("Failed to save game data to file.");
+                        }
+                    }
+                    exit(0);*/
+                break;
+            }
+        }
+        renderGUI(7, choices, "PAUSED", (char*[]){"Back to game", "Restart", "Quit"});
+    } else {
+        int choices = 4;
+        cursorGUI = (cursorGUI + choices - 1) % choices + 1;
+        if (submitGUI){
+            submitGUI = 0;
+            switch (cursorGUI){
+                case 1:// continue
+                    // TODO: render a gui of levels -> gui of ongoing games
+                break;
+                case 2:// new game
+                    // TODO: render a gui for levels to choose which will be player
+                break;
+                case 3:// leaderboard
+                    // render a gui with 4 choices but only 3 effective (next pg, prev pg, back, data<-SKIPPED/UNSELECTABLE)
+                break;
+                case 4:// quit
+                    log_info("User quit the game");
+                    exit(0);
+                break;
+            }
+        }
+        renderGUI(7, choices, "MAIN MENU", (char*[]){"Continue", "New Game", "Leaderboard", "Quit"});
+    }
+    awaitInputGUI();
+}
+
+void handleGame() {
+    if (isGameLoaded) {
+        if (!victory){
+            handleOutput();
+            handleInput();
+            handleInteractions();
+        } else {
+            // Victory animation
+            int goalX = playerX;
+            int goalY = playerY;
+            int directions[4][2] = { {0, -1}, {1, 0}, {0, 1}, {-1, 0} }; // Up, Right, Down, Left
+            int dirIndex = 0;
+            int lineLength = 1;
+            playerX = playerY = -1; // Move player off map during animation
+            handleOutput();
+            int tileCount = roomWidth * roomWidth;
+            // Spiral around victory tile
+            while (lineLength <= roomWidth * 2) {
+                for (int dir = 0; dir < 4; dir++) {// For each direction
+                    for (int step = 0; step < lineLength; step++) { // For each step in that direction
+                        if (dir == 0 || dir == 2) // Up or Down
+                            goalY += directions[dir][1];
+                        else // Right or Left
+                            goalX += directions[dir][0];
+                        if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
+                            continue; // Skip out-of-bounds
+                        usleep(100000 / pow(lineLength, 16)); // spiral goes faster as it expands
+                        map[playerR][goalY][goalX] = CHAR_GOAL;
+                        handleOutput();
+                        printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
+                    }
+                    if (dir == 1 || dir == 3) { // After Right or Left, increase line length
+                        lineLength++;
                     }
                 }
-                exit(0);
             }
-            else {
-                awaitingInput = movePlayer(input);
-            }
+            // Wait for final input
+            flushInput();
+            getch_portable();
+            unloadGame();
         }
-        else{
-            // TODO: UI input handling
-        }
+        
+    } else {
+        // This screen should be unreachable, though exists for future refactoring
+        CLEAR_SCREEN();
+        printf("No game is currently loaded.");
+        getch_portable();
+        CLEAR_SCREEN();
+        atMenuGUI = 1;
     }
 }
 
@@ -541,14 +737,27 @@ int main() {
     // Initialize logging
     log_start();
 
-    // Intro
-    printf("Welcome to The Maze!\n");
+    printf(ANSI_ESC("Welcome to the\n", "90"));
+    printf(ASCII_LOGO);
+
     getch_portable();
+    CLEAR_SCREEN();
+
+    // Check associated files
+
+    // game loop until exit()
+    while (1) {
+        if (atMenuGUI){
+            handleGUI();
+        } else {
+            handleGame();
+        }
+    }
     
     // TODO: prompt to select level
     // TODO: add TITLE property to level
     // Load level
-    loadLevel();
+    //loadLevel();
 
     // TODO: Ask if user wants to 'continue' or 'new game'
     if (findData(SAVE_FILE)) {
@@ -590,52 +799,24 @@ int main() {
     CLEAR_SCREEN();
 
     // Loop game until victory
-    while (!victory){
-        handleOutput();
-        printf("\n\nUse WASD to move, Q to quit.\n");
-        handleInput();
-        handleInteractions();
-    }
-
-    // Victory animation
-    int goalX = playerX;
-    int goalY = playerY;
-    int directions[4][2] = { {0, -1}, {1, 0}, {0, 1}, {-1, 0} }; // Up, Right, Down, Left
-    int dirIndex = 0;
-    int lineLength = 1;
-    playerX = playerY = -1; // Move player off map during animation
-    handleOutput();
-    int tileCount = roomWidth * roomWidth;
-    // Spiral around victory tile
-    while (lineLength <= roomWidth * 2) {
-        for (int dir = 0; dir < 4; dir++) {// For each direction
-            for (int step = 0; step < lineLength; step++) { // For each step in that direction
-                if (dir == 0 || dir == 2) { // Up or Down
-                    goalY += directions[dir][1];
-                } else { // Right or Left
-                    goalX += directions[dir][0];
-                }
-                if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth) {
-                    continue; // Skip out-of-bounds
-                }
-                usleep(100000 / pow(lineLength, 16)); // spiral goes faster as it expands
-                map[playerR][goalY][goalX] = CHAR_GOAL;
-                handleOutput();
-                printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
-            }
-            if (dir == 1 || dir == 3) { // After Right or Left, increase line length
-                lineLength++;
-            }
+    /*while (!victory){
+        if (!atGUI) {
+            handleOutputGUI("Continue");
+            handleInputGUI();
+            printf(ANSI_ESC("/--------------- ", "90;47")ANSI_ESC("MAIN MENU", "34;47")ANSI_ESC(" ---------------\\", "90;47"));
+        } else {
+            handleOutput();
+            printf("\n\nUse WASD to move, Q to quit.\n");
+            handleInput();
+            handleInteractions();
         }
-    }
+    }*/
+
+    
 
     //TODO: prompt to submit to leaderboard
 
-    // Wait for final input
-    // Drain any accidental keypresses produced during the animation,
-    // then block once waiting for a fresh intentional keypress.
-    flushInput();
-    (void)getch_portable();
+    
 
     // Remove save file
     deleteData(SAVE_FILE);
