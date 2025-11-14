@@ -589,10 +589,12 @@ int main() {
     usleep(500000); // 0.5 s delay
     for (int i = 0; i < roomWidth; i++) {
         for (int j = 0; j < roomWidth; j++) {
+            if (map[playerR][i][j] == CHAR_WALL)
+                continue; // Way more satisfying screen this way
             map[playerR][i][j] = CHAR_WALL;
             handleOutput();
             printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade); // Victory message replaces movement instructions
-            usleep(8000); // 8 ms delay
+            usleep(10000); // 10 ms delay
         }
     }
 
