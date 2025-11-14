@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <math.h>
 #include "binio.h"
 #include "loglib.h"
 
@@ -434,7 +435,12 @@ void handleOutput(){
     HIDE_CURSOR();
 
     // Print game info
-    printf("Moves made: %4d\t  Position: %2d, %2d, %2d   \n\n", movesMade, playerX, playerY, playerR);
+    if (!victory){
+        printf("Moves made: %d     Position: %2d, %2d, %2d   \n\n", movesMade, playerX, playerY, playerR);
+    }
+    else {
+        printf("Moves made: %d\n\n", movesMade);// Position will stay due to lack of redraw
+    }
 
     // Print map
     for (int i = 0; i < roomWidth; i++) {
@@ -527,7 +533,7 @@ void handleInput() {
 
 int main() {
     // Initialize logging
-    log_start(LOG_FILE);
+    log_start();
 
     // Intro
     printf("Welcome to The Maze!\n");
@@ -584,17 +590,34 @@ int main() {
     }
 
     // Victory animation
+    int goalX = playerX;
+    int goalY = playerY;
+    int directions[4][2] = { {0, -1}, {1, 0}, {0, 1}, {-1, 0} }; // Up, Right, Down, Left
+    int dirIndex = 0;
+    int lineLength = 1;
     playerX = playerY = -1; // Move player off map during animation
     handleOutput();
-    usleep(500000); // 0.5 s delay
-    for (int i = 0; i < roomWidth; i++) {
-        for (int j = 0; j < roomWidth; j++) {
-            if (map[playerR][i][j] == CHAR_WALL)
-                continue; // Way more satisfying screen this way
-            map[playerR][i][j] = CHAR_WALL;
-            handleOutput();
-            printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade); // Victory message replaces movement instructions
-            usleep(10000); // 10 ms delay
+    int tileCount = roomWidth * roomWidth;
+    // Spiral around victory tile
+    while (lineLength <= roomWidth * 2) {
+        for (int dir = 0; dir < 4; dir++) {// For each direction
+            for (int step = 0; step < lineLength; step++) { // For each step in that direction
+                if (dir == 0 || dir == 2) { // Up or Down
+                    goalY += directions[dir][1];
+                } else { // Right or Left
+                    goalX += directions[dir][0];
+                }
+                if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth) {
+                    continue; // Skip out-of-bounds
+                }
+                usleep(100000 / pow(lineLength, 16)); // spiral goes faster as it expands
+                map[playerR][goalY][goalX] = CHAR_GOAL;
+                handleOutput();
+                printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
+            }
+            if (dir == 1 || dir == 3) { // After Right or Left, increase line length
+                lineLength++;
+            }
         }
     }
 

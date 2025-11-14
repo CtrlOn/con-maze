@@ -6,10 +6,15 @@
 #include <stdarg.h>
 #include <time.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
 
 /* Minimal header-only logging utility.
    Public functions:
-     - log_start(const char *path)    : initialize logging (optional)
+     - log_start()                   : initialize logging (creates logs folder and timestamped file)
      - log_info(const char *fmt, ...) : informational message
      - log_warn(const char *fmt, ...) : warning message
      - log_error(const char *fmt, ...) : error message
@@ -17,9 +22,7 @@
    At exit the library writes runtime length (seconds) and closes the log file.
 */
 
-#ifndef LOGLIB_DEFAULT_PATH
-#define LOGLIB_DEFAULT_PATH "runtime.log"
-#endif
+
 
 static FILE *loglib_file = NULL;
 static time_t loglib_start_time = 0;
@@ -39,6 +42,20 @@ static void loglib_now_str(char *buf, size_t bufsz) {
     }
 
     strftime(buf, bufsz, "%Y-%m-%d %H:%M:%S", &tm_buf);
+}
+
+/* Internal: generate log filename based on init time. */
+static void loglib_generate_filename(char *buf, size_t bufsz, time_t init_time) {
+    struct tm tm_buf;
+    struct tm *tm_ptr = localtime(&init_time);
+
+    if (tm_ptr) {
+        tm_buf = *tm_ptr;
+    } else {
+        memset(&tm_buf, 0, sizeof(tm_buf));
+    }
+
+    strftime(buf, bufsz, "logs/runtime_%Y-%m-%d_%H-%M-%S.log", &tm_buf);
 }
 
 /* Close log and write runtime summary. Registered with atexit. */
@@ -62,11 +79,23 @@ static void loglib_close(void) {
 }
 
 /* Initialize logging to a given path. Safe to call multiple times. */
-static void log_start(const char *path) {
+static void log_start_path(const char *path) {
     if (loglib_initialized) return;
 
-    loglib_file = fopen(path ? path : LOGLIB_DEFAULT_PATH, "a");
+    char filepath[256];
     loglib_start_time = time(NULL);
+    if (path) {
+        strcpy(filepath, path);
+        loglib_file = fopen(filepath, "a"); /* append for custom paths */
+    } else {
+        loglib_generate_filename(filepath, sizeof(filepath), loglib_start_time);
+#ifdef _WIN32
+        _mkdir("logs"); /* create logs directory if it doesn't exist */
+#else
+        mkdir("logs", 0755); /* create logs directory if it doesn't exist */
+#endif
+        loglib_file = fopen(filepath, "w"); /* write mode for new file per session */
+    }
     loglib_initialized = 1;
 
     char ts[64];
@@ -80,9 +109,14 @@ static void log_start(const char *path) {
     atexit(loglib_close);
 }
 
+/* Initialize logging with default behavior. */
+static void log_start(void) {
+    log_start_path(NULL);
+}
+
 /* Lazy init: called by log functions if user didn't call log_start. */
 static void loglib_ensure_init(void) {
-    if (!loglib_initialized) log_start(NULL);
+    if (!loglib_initialized) log_start_path(NULL);
 }
 
 /* Core logging function */
