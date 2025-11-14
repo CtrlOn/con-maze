@@ -4,6 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+//TODO: store saves in folder
+//  saves
+//    |-- finished
+//    |-- ongoing
+
+//TODO: store a hash of level data to detect mismatched saves
+
 static inline int findData(const char *path) {
     FILE *file = fopen(path, "rb");
     if (file) {

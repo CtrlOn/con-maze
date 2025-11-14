@@ -128,6 +128,7 @@ int playerR;
 
 int victory = 0;
 int loading = 0;
+int atUI = 0;
 int movesMade = 0;
 char *moveSequence = NULL;
 
@@ -503,30 +504,35 @@ void handleInput() {
     int awaitingInput = 1;
     while (awaitingInput) {
         char input = getch_portable();
-        if (input == 'q') {
-            printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
-            log_info("User opted to quit the game.");
-            // Prompt user to save progress
-            char saveInput = 0;
-            while (saveInput != 'y' && saveInput != 'n') {
-                saveInput = getch_portable();
-            }
-
-            // Save game state
-            if (saveInput == 'y') {
-                log_info("User opted to save the game.");
-                if (saveData(SAVE_FILE, movesMade, moveSequence)) {
-                    printf("\nGame saved successfully!\n");
-                    log_info("Success; saved %d moves", movesMade);
-                } else {
-                    printf("\nFailed to save game.\n");
-                    log_error("Failed to save game data to file.");
+        if (!atUI){
+            if (input == 'q') {
+                printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
+                log_info("User opted to quit the game.");
+                // Prompt user to save progress
+                char saveInput = 0;
+                while (saveInput != 'y' && saveInput != 'n') {
+                    saveInput = getch_portable();
                 }
+
+                // Save game state
+                if (saveInput == 'y') {
+                    log_info("User opted to save the game.");
+                    if (saveData(SAVE_FILE, movesMade, moveSequence)) {
+                        printf("\nGame saved successfully!\n");
+                        log_info("Success; saved %d moves", movesMade);
+                    } else {
+                        printf("\nFailed to save game.\n");
+                        log_error("Failed to save game data to file.");
+                    }
+                }
+                exit(0);
             }
-            exit(0);
+            else {
+                awaitingInput = movePlayer(input);
+            }
         }
-        else {
-            awaitingInput = movePlayer(input);
+        else{
+            // TODO: UI input handling
         }
     }
 }
@@ -539,10 +545,12 @@ int main() {
     printf("Welcome to The Maze!\n");
     getch_portable();
     
+    // TODO: prompt to select level
+    // TODO: add TITLE property to level
     // Load level
     loadLevel();
 
-    // Ask if user wants to 'continue' or 'new game'
+    // TODO: Ask if user wants to 'continue' or 'new game'
     if (findData(SAVE_FILE)) {
         char loadInput = 0;
         printf("\nSave file found! Continue? Y/N\n");
@@ -620,6 +628,8 @@ int main() {
             }
         }
     }
+
+    //TODO: prompt to submit to leaderboard
 
     // Wait for final input
     // Drain any accidental keypresses produced during the animation,
