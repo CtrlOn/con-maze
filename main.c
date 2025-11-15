@@ -6,12 +6,14 @@
 #include <time.h>
 #include <ctype.h>
 #include <math.h>
+#include <dirent.h>
 #include "binio.h"
 #include "loglib.h"
 
-#define SAVE_FILE "save.bin"
-#define LOG_FILE "runtime.log"
-#define LEVEL_FILE "level.dat"
+#define GAMES_FOLDER "saves/games/"
+#define FINISHED_FOLDER GAMES_FOLDER"/%s/finished"
+#define ONGOING_FOLDER GAMES_FOLDER"/%s/ongoing"
+#define LEVELS_FOLDER "saves/levels"
 
 // Macro for ANSI escape codes
 #define ANSI_ESC(text, code) "\x1B[" code "m" text "\x1B[0m"
@@ -85,7 +87,6 @@ ANSI_ESC("  //////    ///////   //      /// ", "96")ANSI_ESC("      ", "97")ANSI
 #define LEFT [playerR][playerY][playerX - 1]
 #define RIGHT [playerR][playerY][playerX + 1]
 #define HERE [playerR][playerY][playerX]
-//TODO: define gui
 
 // ------------------------------------------------------------------------------------------------
 // SYMBOL       METADATA    TILE        INFO
@@ -152,11 +153,21 @@ char *moveSequence = NULL;
 int victory = 0;
 int loading = 0;
 
-void loadGame(/*TODO: from where*/){
-    log_info("Loading level from %s", LEVEL_FILE);
-    FILE *f = fopen(LEVEL_FILE, "r");
+// Locally loaded files
+int localDataLoaded = 0;
+int levelCount;
+char** levelNames;
+int* finishedGameCounts;
+char*** finishedPlayerNames;
+int* ongoingGameCounts;
+char*** ongoingPlayerNames;
+char* loadedGame;
+
+void loadGame(char* levelFile) {
+    log_info("Loading level from %s", levelFile);
+    FILE *f = fopen(levelFile, "r");
     if (!f) {
-        log_error("Failed to open level file '%s'.", LEVEL_FILE);
+        log_error("Failed to open level file '%s'.", levelFile);
         exit(1);
     }
 
@@ -346,12 +357,129 @@ void loadGame(/*TODO: from where*/){
     log_info("Loaded level: WIDTH=%d, ROOM_COUNT=%d", roomWidth, roomCount);
 }
 
-void unloadGame(){
+void unloadGame() {
     // free all shit that loadgame allocates and reset flags
 }
 
-void FetchLocalData(){
-    // read files around and put info in app state vars
+void fetchLocalData() {
+    if (localDataLoaded) {
+        // Free previously allocated memory
+        for (int i = 0; i < levelCount; i++) {
+            free(levelNames[i]);
+        }
+        free(levelNames);
+        free(finishedGameCounts);
+        for (int i = 0; i < levelCount; i++) {
+            if (finishedPlayerNames[i]) {
+                for (int j = 0; j < finishedGameCounts[i]; j++) {
+                    free(finishedPlayerNames[i][j]);
+                }
+                free(finishedPlayerNames[i]);
+            }
+        }
+        free(finishedPlayerNames);
+        free(ongoingGameCounts);
+        for (int i = 0; i < levelCount; i++) {
+            if (ongoingPlayerNames[i]) {
+                for (int j = 0; j < ongoingGameCounts[i]; j++) {
+                    free(ongoingPlayerNames[i][j]);
+                }
+                free(ongoingPlayerNames[i]);
+            }
+        }
+        free(ongoingPlayerNames);
+    }
+
+    // Scan LEVELS_FOLDER for level files
+    DIR *dir = opendir(LEVELS_FOLDER);
+    if (!dir) {
+        log_error("Failed to open levels directory '%s'.", LEVELS_FOLDER);
+        levelCount = 0;
+        localDataLoaded = 1;
+        return;
+    }
+
+    struct dirent *entry;
+    int count = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue; // Skip . and ..
+        count++;
+    }
+    closedir(dir);
+
+    levelCount = count;
+    levelNames = (char**)malloc(levelCount * sizeof(char*));
+    finishedGameCounts = (int*)malloc(levelCount * sizeof(int));
+    finishedPlayerNames = (char***)malloc(levelCount * sizeof(char**));
+    ongoingGameCounts = (int*)malloc(levelCount * sizeof(int));
+    ongoingPlayerNames = (char***)malloc(levelCount * sizeof(char**));
+
+    // Reopen and collect level names and data
+    dir = opendir(LEVELS_FOLDER);
+    int idx = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        levelNames[idx] = strdup(entry->d_name);
+
+        // Scan finished folder for this level
+        char finishedPath[256];
+        sprintf(finishedPath, FINISHED_FOLDER, entry->d_name);
+        DIR *fdir = opendir(finishedPath);
+        if (fdir) {
+            int fcount = 0;
+            struct dirent *fentry;
+            while ((fentry = readdir(fdir)) != NULL) {
+                if (fentry->d_name[0] == '.') continue;
+                fcount++;
+            }
+            closedir(fdir);
+            finishedGameCounts[idx] = fcount;
+            finishedPlayerNames[idx] = (char**)malloc(fcount * sizeof(char*));
+            fdir = opendir(finishedPath);
+            int fidx = 0;
+            while ((fentry = readdir(fdir)) != NULL) {
+                if (fentry->d_name[0] == '.') continue;
+                finishedPlayerNames[idx][fidx] = strdup(fentry->d_name);
+                fidx++;
+            }
+            closedir(fdir);
+        } else {
+            finishedGameCounts[idx] = 0;
+            finishedPlayerNames[idx] = NULL;
+        }
+
+        // Scan ongoing folder for this level
+        char ongoingPath[256];
+        sprintf(ongoingPath, ONGOING_FOLDER, entry->d_name);
+        DIR *odir = opendir(ongoingPath);
+        if (odir) {
+            int ocount = 0;
+            struct dirent *oentry;
+            while ((oentry = readdir(odir)) != NULL) {
+                if (oentry->d_name[0] == '.') continue;
+                ocount++;
+            }
+            closedir(odir);
+            ongoingGameCounts[idx] = ocount;
+            ongoingPlayerNames[idx] = (char**)malloc(ocount * sizeof(char*));
+            odir = opendir(ongoingPath);
+            int oidx = 0;
+            while ((oentry = readdir(odir)) != NULL) {
+                if (oentry->d_name[0] == '.') continue;
+                ongoingPlayerNames[idx][oidx] = strdup(oentry->d_name);
+                oidx++;
+            }
+            closedir(odir);
+        } else {
+            ongoingGameCounts[idx] = 0;
+            ongoingPlayerNames[idx] = NULL;
+        }
+
+        idx++;
+    }
+    closedir(dir);
+
+    localDataLoaded = 1;
 }
 
 void addMoveToSequence(char move) { // For faster loading, sys calls every 10 moves
@@ -371,7 +499,7 @@ void addMoveToSequence(char move) { // For faster loading, sys calls every 10 mo
     movesMade++;
 }
 
-void handleInteractions(){
+void handleInteractions() {
     if (metadata HERE == -2)
         return; // Error state, do nothing
     if (map HERE == CHAR_GOAL) {
@@ -458,7 +586,7 @@ int movePlayer(char input) {
     return !valid;
 }
 
-void handleOutput(){
+void handleOutput() {
     // Move cursor to top-left and hide cursor while redrawing to avoid full-screen flash
     HOME_CURSOR();
     HIDE_CURSOR();
@@ -527,7 +655,6 @@ void handleInput() {
         char input = getch_portable();
         if (input == 'q') {
             atMenuGUI = 1; // Q throws into menu
-            cursorGUI = 1; // Default selection is first
             
         } else {
             awaitingInput = movePlayer(input);
@@ -560,7 +687,7 @@ retry:
     }
 }
 
-void renderGUI(int padding, int choices, char* title, char **options){
+void renderGUI(int padding, int choices, char* title, char **options) {
     HOME_CURSOR();
     HIDE_CURSOR();
 
@@ -616,10 +743,63 @@ void renderGUI(int padding, int choices, char* title, char **options){
 }
 
 void handleGUI() {
+    int goBack = 0;
+    cursorGUI = 1;
+    while(!goBack){
+        if (isGameLoaded){
+            int choices = 3;
+            renderGUI(7, choices, "PAUSED", (char*[]){"Back to game", "Restart", "Quit"});
+            awaitInputGUI();
+            cursorGUI = (cursorGUI + choices - 1) % choices + 1;
+            if (submitGUI) {
+                submitGUI = 0;
+                switch (cursorGUI) {
+                    case 1:// back to game
+                        goBack = 1;
+                    break;
+                    case 2:// restart
+                        char* game = loadedGame;
+                        unloadGame();
+                        loadGame(loadedGame);
+                        goBack = 1;
+                    break;
+                    case 3:// quit
+                        //TODO: prompt to save
+                        /*
+                        printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
+                        log_info("User opted to quit the game.");
+                        // Prompt user to save progress
+                        char saveInput = 0;
+                        while (saveInput != 'y' && saveInput != 'n') {
+                            saveInput = getch_portable();
+                        }
+
+                        // Save game state
+                        if (saveInput == 'y') {
+                            log_info("User opted to save the game.");
+                            if (saveData(SAVE_FILE, movesMade, moveSequence)) {
+                                printf("\nGame saved successfully!\n");
+                                log_info("Success; saved %d moves", movesMade);
+                            } else {
+                                printf("\nFailed to save game.\n");
+                                log_error("Failed to save game data to file.");
+                            }
+                        }
+                        exit(0);*/
+                    break;
+                }
+            }
+
+        } else {
+            // TODO: non-loadgame gui
+        }
+    }
+    atMenuGUI = 0;
+    /*
     if (isGameLoaded) {
         int choices = 3;
         cursorGUI = (cursorGUI + choices - 1) % choices + 1;
-        if (submitGUI){
+        if (submitGUI) {
             submitGUI = 0;
             switch (cursorGUI){
                 case 1:// back to game
@@ -650,7 +830,7 @@ void handleGUI() {
                             log_error("Failed to save game data to file.");
                         }
                     }
-                    exit(0);*/
+                    exit(0);//*'/
                 break;
             }
         }
@@ -662,7 +842,7 @@ void handleGUI() {
             submitGUI = 0;
             switch (cursorGUI){
                 case 1:// continue
-                    // TODO: render a gui of levels -> gui of ongoing games
+                    renderGUI
                 break;
                 case 2:// new game
                     // TODO: render a gui for levels to choose which will be player
@@ -679,6 +859,7 @@ void handleGUI() {
         renderGUI(7, choices, "MAIN MENU", (char*[]){"Continue", "New Game", "Leaderboard", "Quit"});
     }
     awaitInputGUI();
+    */
 }
 
 void handleGame() {
@@ -744,6 +925,7 @@ int main() {
     CLEAR_SCREEN();
 
     // Check associated files
+    fetchLocalData();
 
     // game loop until exit()
     while (1) {
@@ -759,7 +941,8 @@ int main() {
     // Load level
     //loadLevel();
 
-    // TODO: Ask if user wants to 'continue' or 'new game'
+    // TODO: probably goes to trash
+    /*
     if (findData(SAVE_FILE)) {
         char loadInput = 0;
         printf("\nSave file found! Continue? Y/N\n");
@@ -767,8 +950,10 @@ int main() {
         // Prompt user to load save
         while (loadInput != 'y' && loadInput != 'n') {
             loadInput = getch_portable();
-        }
+    }}*/
 
+        // TODO: loading piece here
+        /*
         // Load game state
         if (loadInput == 'y') {
             log_info("User opted to load saved game.");
@@ -794,7 +979,7 @@ int main() {
             log_info("Success; loaded %d moves", loadedMoves);
             loading = 0;
         }
-    }
+        */
 
     CLEAR_SCREEN();
 
@@ -819,7 +1004,7 @@ int main() {
     
 
     // Remove save file
-    deleteData(SAVE_FILE);
+    // deleteData(SAVE_FILE);
 
     exit(0);
 }
