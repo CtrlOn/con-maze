@@ -528,7 +528,7 @@ cleanup:
     exit(1);
 }
 
-void fetchLocalData() {
+void fetchLocalData() { // FIXME: handle case where saves folder is empty (causes crash atm)
     if (localDataLoaded) {
         // Free previously allocated memory
         for (int i = 0; i < levelCount; i++) {
