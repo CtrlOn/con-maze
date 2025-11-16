@@ -170,6 +170,44 @@ int** finishedMovesCounts;
 int* ongoingGameCounts;
 char*** ongoingPlayerNames;
 
+void cleanupLocalData() {
+    if (localDataLoaded) {
+        for (int i = 0; i < levelCount; i++) {
+            free(levelNames[i]);
+        }
+        free(levelNames);
+        free(finishedGameCounts);
+        for (int i = 0; i < levelCount; i++) {
+            if (finishedPlayerNames[i]) {
+                for (int j = 0; j < finishedGameCounts[i]; j++) {
+                    free(finishedPlayerNames[i][j]);
+                }
+                free(finishedPlayerNames[i]);
+            }
+        }
+        free(finishedPlayerNames);
+        if (finishedMovesCounts) {
+            for (int i = 0; i < levelCount; i++) {
+                if (finishedMovesCounts[i]) {
+                    free(finishedMovesCounts[i]);
+                }
+            }
+            free(finishedMovesCounts);
+        }
+        free(ongoingGameCounts);
+        for (int i = 0; i < levelCount; i++) {
+            if (ongoingPlayerNames[i]) {
+                for (int j = 0; j < ongoingGameCounts[i]; j++) {
+                    free(ongoingPlayerNames[i][j]);
+                }
+                free(ongoingPlayerNames[i]);
+            }
+        }
+        free(ongoingPlayerNames);
+        localDataLoaded = 0;
+    }
+}
+
 char* getStringInput(char* prompt) {
     printf("%s", prompt);
     char* buffer = (char*)malloc(64 * sizeof(char));
@@ -258,7 +296,7 @@ void loadGame(char* levelFile) {
     FILE *f = fopen(fullPath, "r");
     if (!f) {
         log_error("Failed to open level file '%s'.", fullPath);
-        exit(1);
+        goto cleanup;
     }
 
     char line[1024];
@@ -285,7 +323,7 @@ void loadGame(char* levelFile) {
     if (width <= 0) {
         log_error("Missing or invalid WIDTH in level file.");
         fclose(f);
-        exit(1);
+        goto cleanup;
     }
     if (width > 32) {
         log_warn("Rooms of high width might not fit in console window.");
@@ -325,7 +363,7 @@ void loadGame(char* levelFile) {
 
     if (tileCount == 0) {
         log_error("No room data found between BEGIN and END.");
-        exit(1);
+        goto cleanup;
     }
 
     if (tileCount % roomWidth != 0) {
@@ -334,18 +372,24 @@ void loadGame(char* levelFile) {
     roomCount = (int)(tileCount / roomWidth);
     if (roomCount <= 0) {
         log_error("No valid rooms found in level data.");
-        exit(1);
+        goto cleanup;
     }
 
     // Allocate map and metadata
     map = (char***)malloc(roomCount * sizeof(char**));
+    if (!map) goto cleanup;
     metadata = (int***)malloc(roomCount * sizeof(int**));
+    if (!metadata) goto cleanup;
     for (int r = 0; r < roomCount; ++r) {
         map[r] = (char**)malloc(roomWidth * sizeof(char*));
+        if (!map[r]) goto cleanup;
         metadata[r] = (int**)malloc(roomWidth * sizeof(int*));
+        if (!metadata[r]) goto cleanup;
         for (int i = 0; i < roomWidth; ++i) {
             map[r][i] = (char*)malloc(roomWidth * sizeof(char));
+            if (!map[r][i]) goto cleanup;
             metadata[r][i] = (int*)malloc(roomWidth * sizeof(int));
+            if (!metadata[r][i]) goto cleanup;
             for (int j = 0; j < roomWidth; ++j) metadata[r][i][j] = 0;
         }
     }
@@ -430,11 +474,11 @@ void loadGame(char* levelFile) {
     // validate overall level
     if (!foundStart) {
         log_error("No start tile '@' found in level data (any room).");
-        exit(1);
+        goto cleanup;
     }
     if (foundStart > 1) {
         log_error("Multiple start tiles '@' found in level data (%d).", foundStart);
-        exit(1);
+        goto cleanup;
     }
     if (!foundGoal) {
         log_warn("No goal tile '$' found in level data (any room).");
@@ -444,10 +488,44 @@ void loadGame(char* levelFile) {
     for (size_t i = 0; i < tileCount; ++i) free(tileLines[i]);
     free(tileLines);
 
-    isGameLoaded = 1;
     loadedLevelName = strdup(levelFile);
+    if (!loadedLevelName) goto cleanup;
+
+    isGameLoaded = 1;
 
     log_info("Loaded level: WIDTH=%d, ROOM_COUNT=%d", roomWidth, roomCount);
+    return;
+
+cleanup:
+    if (map) {
+        for (int r = 0; r < roomCount; ++r) {
+            if (map[r]) {
+                for (int i = 0; i < roomWidth; ++i) {
+                    if (map[r][i]) free(map[r][i]);
+                }
+                free(map[r]);
+            }
+        }
+        free(map);
+        map = NULL;
+    }
+    if (metadata) {
+        for (int r = 0; r < roomCount; ++r) {
+            if (metadata[r]) {
+                for (int i = 0; i < roomWidth; ++i) {
+                    if (metadata[r][i]) free(metadata[r][i]);
+                }
+                free(metadata[r]);
+            }
+        }
+        free(metadata);
+        metadata = NULL;
+    }
+    if (loadedLevelName) free(loadedLevelName);
+    loadedLevelName = NULL;
+    roomWidth = 0;
+    roomCount = 0;
+    exit(1);
 }
 
 void fetchLocalData() {
@@ -1220,9 +1298,8 @@ int main() {
         }
     }
 
+    // Good bye
     CLEAR_SCREEN();
-
     printf("Good bye!");
-
     exit(0);
 }
