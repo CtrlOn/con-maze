@@ -1,11 +1,11 @@
 # Console maze game
-  
+
 - This is a game rendered with console monospaced characters  
 - The goal is to escape by moving around with W/A/S/D  
-- There are keys, doors and more  
-  
+- There are keys, doors and more
+
 ## Features
-  
+
 - [x] Render the maze and player
 - [x] Character movement with W/A/S/D
 - [x] Victory by reaching the goal
@@ -19,7 +19,19 @@
 - [x] Ability to swap between game/GUI anytime
 
 ## Usage
+
+### Download ZIP
+
+Download link for the lazy ones (Windows only)  
+https://drive.google.com/file/d/1w70blVMbYh9AIksj3V2kWrj9H8n3YCmB/view?usp=sharing  
   
+1. Download
+2. Extract
+3. Run game.exe
+4. Enjoy
+
+### Compile
+
 1. Download source code
 2. Ensure there's `gcc` or `mingw` installed on your machine
 3. Compile the code using `gcc main.c -o game.exe`
@@ -28,7 +40,7 @@
 6. Profit
 
 ## Gameplay
-  
+
 ### Game Screen
 ```ansi
 Moves made: 0     Position:  8,  7,  0
@@ -56,7 +68,7 @@ Moves made: 0     Position:  8,  7,  0
 
 Use WASD to move, Q to quit.
 ```
-  
+
 ### Indicators
 ```ANSI
 Player:       <>
@@ -66,7 +78,7 @@ Wall:         ##
 Door:         ## (Different colors)
 Key:          o+
 ```
-  
+
 ### Instructions
 - Player can be moved using keys `W` `A` `S` `D`
 - Victory is achieved by stepping on goal
@@ -75,9 +87,9 @@ Key:          o+
 - Collect the key by stepping on it, and doors will unlock
 - Passages can bring player to other room
 - Enter `PAUSED` GUI with `Q`
-  
+
 ## Save system
-  
+
 > *Done playing before finishing?*  
 > *Not a problem*  
   
@@ -95,15 +107,15 @@ Unfinished games of each level are stored in `./saves/games/<level_name>/ongoing
 1. While in the GUI, select `Continue`
 2. In `LEVEL SELECT` pick the level you've played before
 3. In `SAVE SELECT` select player name you inputted before
-  
+
 ### Deterministic saving method
-  
+
 Game save is stored in moves made!  
 This means that every input will be submitted one by one.  
 Save file will grow with each move  
-  
+
 #### Why?
-  
+
 While technically it is possible to store players position, keys collected and etc. to save space, I preferred this method because:
 - Instead of saving **Was the game won?** it will save **How was the game won?**
 - It is possible to write a pathfinder algorithm that can beat the game without having to run it and fabricate the save file.
@@ -122,12 +134,13 @@ Their format is the same as save files, however, loading them would result in an
 2. In the `LEADERBOARD` select level you wish to see victories of.
 
 ## Level building
-
+  
 File `tutorial.dat` contains information about level.  
 It can be edited with a text editor.  
 The way it works is explained inside.
 
 ### tutorial.dat
+
 ```ansi
 ; Welcome to level builder
 ; use unicode symbols to build levels
@@ -221,6 +234,7 @@ END
 ```
 
 ### Error handling
+
 - There must exist 1 `Start`, fatal error otherwise
 - Keys that didn't open any doors log warning
 - Passages that have no destination will cause non-fatal runtime error
@@ -231,6 +245,7 @@ END
 - Excess metadata will ignore last and log warning
 
 ### Minimal example
+
 ```ansi
 WIDTH 5
 BEGIN
