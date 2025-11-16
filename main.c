@@ -7,12 +7,17 @@
 #include <ctype.h>
 #include <math.h>
 #include <dirent.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
 #include "binio.h"
 #include "loglib.h"
 
-#define GAMES_FOLDER "saves/games/"
-#define FINISHED_FOLDER GAMES_FOLDER"/%s/finished"
-#define ONGOING_FOLDER GAMES_FOLDER"/%s/ongoing"
+#define GAMES_FOLDER "saves/games"
+#define FINISHED_FOLDER "finished"
+#define ONGOING_FOLDER "ongoing"
 #define LEVELS_FOLDER "saves/levels"
 
 // Macro for ANSI escape codes
@@ -161,10 +166,92 @@ int levelCount;
 char** levelNames;
 int* finishedGameCounts;
 char*** finishedPlayerNames;
+int** finishedMovesCounts;
 int* ongoingGameCounts;
 char*** ongoingPlayerNames;
 
+char* getStringInput(char* prompt) {
+    printf("%s", prompt);
+    char* buffer = (char*)malloc(64 * sizeof(char));
+    int i = 0;
+    while (1) {
+        char c = getch_portable();
+        if (c == '\r' || c == '\n') {
+            buffer[i] = '\0';
+            break;
+        } else if (c == 8 || c == 127) { // backspace
+            if (i > 0) {
+                i--;
+                printf("\b \b");
+            }
+        } else if (isprint((unsigned char)c) && i < 63) {
+            buffer[i++] = c;
+            printf("%c", c);
+        }
+    }
+    printf("\n");
+    return buffer;
+}
+
+void unloadGame() {
+    // Free map
+    if (map) {
+        for (int r = 0; r < roomCount; ++r) {
+            if (map[r]) {
+                for (int i = 0; i < roomWidth; ++i) {
+                    if (map[r][i]) {
+                        free(map[r][i]);
+                    }
+                }
+                free(map[r]);
+            }
+        }
+        free(map);
+        map = NULL;
+    }
+
+    // Free metadata
+    if (metadata) {
+        for (int r = 0; r < roomCount; ++r) {
+            if (metadata[r]) {
+                for (int i = 0; i < roomWidth; ++i) {
+                    if (metadata[r][i]) {
+                        free(metadata[r][i]);
+                    }
+                }
+                free(metadata[r]);
+            }
+        }
+        free(metadata);
+        metadata = NULL;
+    }
+
+    // Free moveSequence
+    if (moveSequence) {
+        free(moveSequence);
+        moveSequence = NULL;
+    }
+
+    // Reset game state variables
+    roomWidth = 0;
+    roomCount = 0;
+    playerX = 0;
+    playerY = 0;
+    playerR = 0;
+    movesMade = 0;
+    victory = 0;
+    loading = 0;
+    isGameLoaded = 0;
+    if (loadedLevelName)
+        free(loadedLevelName);
+    loadedLevelName = NULL;
+}
+
 void loadGame(char* levelFile) {
+    if (isGameLoaded){
+        log_warn("Game unloaded (lazy).");
+        unloadGame();
+    }
     char fullPath[256];
     sprintf(fullPath, "%s/%s.dat", LEVELS_FOLDER, levelFile);
     log_info("Loading level from %s", fullPath);
@@ -357,11 +444,10 @@ void loadGame(char* levelFile) {
     for (size_t i = 0; i < tileCount; ++i) free(tileLines[i]);
     free(tileLines);
 
-    log_info("Loaded level: WIDTH=%d, ROOM_COUNT=%d", roomWidth, roomCount);
-}
+    isGameLoaded = 1;
+    loadedLevelName = strdup(levelFile);
 
-void unloadGame() {
-    // free all shit that loadgame allocates and reset flags
+    log_info("Loaded level: WIDTH=%d, ROOM_COUNT=%d", roomWidth, roomCount);
 }
 
 void fetchLocalData() {
@@ -381,6 +467,14 @@ void fetchLocalData() {
             }
         }
         free(finishedPlayerNames);
+        if (finishedMovesCounts) {
+            for (int i = 0; i < levelCount; i++) {
+                if (finishedMovesCounts[i]) {
+                    free(finishedMovesCounts[i]);
+                }
+            }
+            free(finishedMovesCounts);
+        }
         free(ongoingGameCounts);
         for (int i = 0; i < levelCount; i++) {
             if (ongoingPlayerNames[i]) {
@@ -414,6 +508,7 @@ void fetchLocalData() {
     levelNames = (char**)malloc(levelCount * sizeof(char*));
     finishedGameCounts = (int*)malloc(levelCount * sizeof(int));
     finishedPlayerNames = (char***)malloc(levelCount * sizeof(char**));
+    finishedMovesCounts = (int**)malloc(levelCount * sizeof(int*));
     ongoingGameCounts = (int*)malloc(levelCount * sizeof(int));
     ongoingPlayerNames = (char***)malloc(levelCount * sizeof(char**));
 
@@ -429,7 +524,7 @@ void fetchLocalData() {
 
         // Scan finished folder for this level
         char finishedPath[256];
-        sprintf(finishedPath, FINISHED_FOLDER, entry->d_name);
+        sprintf(finishedPath, GAMES_FOLDER"/%s/"FINISHED_FOLDER"/", name);
         DIR *fdir = opendir(finishedPath);
         if (fdir) {
             int fcount = 0;
@@ -441,14 +536,27 @@ void fetchLocalData() {
             closedir(fdir);
             finishedGameCounts[idx] = fcount;
             finishedPlayerNames[idx] = (char**)malloc(fcount * sizeof(char*));
+            finishedMovesCounts[idx] = (int*)malloc(fcount * sizeof(int));
             fdir = opendir(finishedPath);
             int fidx = 0;
             while ((fentry = readdir(fdir)) != NULL) {
                 if (fentry->d_name[0] == '.') continue;
-            char* saveName = strdup(fentry->d_name);
-            char* dot = strrchr(saveName, '.');
-            if (dot && strcmp(dot, ".bin") == 0) *dot = '\0';
-            finishedPlayerNames[idx][fidx] = saveName;
+                char* saveName = strdup(fentry->d_name);
+                char* dot = strrchr(saveName, '.');
+                if (dot && strcmp(dot, ".bin") == 0) *dot = '\0';
+                finishedPlayerNames[idx][fidx] = saveName;
+                // Load moves count
+                char fullPath[256];
+                sprintf(fullPath, "%s/%s.bin", finishedPath, saveName);
+                int loadedMoves;
+                char* loadedSeq;
+                if (loadData(fullPath, &loadedMoves, &loadedSeq)) {
+                    finishedMovesCounts[idx][fidx] = loadedMoves;
+                    free(loadedSeq);
+                } else {
+                    finishedMovesCounts[idx][fidx] = -1;
+                    log_error("Failed to load moves for %s", fullPath);
+                }
                 fidx++;
             }
             closedir(fdir);
@@ -459,7 +567,7 @@ void fetchLocalData() {
 
         // Scan ongoing folder for this level
         char ongoingPath[256];
-        sprintf(ongoingPath, ONGOING_FOLDER, entry->d_name);
+        sprintf(ongoingPath, GAMES_FOLDER"/%s/"ONGOING_FOLDER"/", name);
         DIR *odir = opendir(ongoingPath);
         if (odir) {
             int ocount = 0;
@@ -475,7 +583,20 @@ void fetchLocalData() {
             int oidx = 0;
             while ((oentry = readdir(odir)) != NULL) {
                 if (oentry->d_name[0] == '.') continue;
-                ongoingPlayerNames[idx][oidx] = strdup(oentry->d_name);
+                char* saveName = strdup(oentry->d_name);
+                char* dot = strrchr(saveName, '.');
+                if (dot && strcmp(dot, ".bin") == 0) *dot = '\0';
+                ongoingPlayerNames[idx][oidx] = saveName;
+                // Load moves count
+                char fullPath[256];
+                sprintf(fullPath, "%s/%s.bin", ongoingPath, saveName);
+                int loadedMoves;
+                char* loadedSeq;
+                if (loadData(fullPath, &loadedMoves, &loadedSeq)) {
+                    free(loadedSeq);
+                } else {
+                    log_error("Failed to load moves for %s", fullPath);
+                }
                 oidx++;
             }
             closedir(odir);
@@ -562,26 +683,31 @@ void handleInteractions() {
 }
 
 int movePlayer(char input) {
-    int valid = 1;
+    int valid = 0;
     switch (input) {
         case 'w':
-            if (!(map UP == CHAR_WALL) && !(map UP == CHAR_DOOR && metadata UP != -1))
-                playerY--;
+            if ((map UP == CHAR_WALL) || (map UP == CHAR_DOOR && metadata UP != -1))
+                break;    
+            playerY--;
+            valid = 1;
         break;
         case 's':
-            if (!(map DOWN == CHAR_WALL) && !(map DOWN == CHAR_DOOR && metadata DOWN != -1))
-                playerY++;
+            if ((map DOWN == CHAR_WALL) || (map DOWN == CHAR_DOOR && metadata DOWN != -1))
+                break;
+            playerY++;
+            valid = 1;
         break;
         case 'a':
-            if (!(map LEFT == CHAR_WALL) && !(map LEFT == CHAR_DOOR && metadata LEFT != -1))
-                playerX--;
+            if ((map LEFT == CHAR_WALL) || (map LEFT == CHAR_DOOR && metadata LEFT != -1))
+                break;
+            playerX--;
+            valid = 1;
         break;
         case 'd':
-            if (!(map RIGHT == CHAR_WALL) && !(map RIGHT == CHAR_DOOR && metadata RIGHT != -1))
-                playerX++;
-        break;
-        default:
-            valid = 0;
+            if ((map RIGHT == CHAR_WALL) || (map RIGHT == CHAR_DOOR && metadata RIGHT != -1))
+                break;
+            playerX++;
+            valid = 1;
         break;
     }
     if (valid) {
@@ -648,7 +774,6 @@ void handleOutput() {
         }
         printf("\n");
     }
-    printf("\n\nUse WASD to move, Q to quit.\n");
     SHOW_CURSOR();
 }
 
@@ -751,14 +876,36 @@ void renderGUI(int padding, int choices, char* title, char **options/*, content*
     
     // Options
     for (int i = 0; i < choices; i++) {
+        int hovered = (i + 1 == cursorGUI) && (choices > 1);
         // Left Border piece
         printf(ANSI_COL("##", "37;100"));
-        // The option
-        if (i + 1 == cursorGUI) {
-            printf(ANSI_COL(" > %d. %s < ", "94"), i + 1, options[i]);
-        } else {
-            printf(ANSI_COL("   %d. %s   ", "34"), i + 1, options[i]);
-        }
+
+        // Add '>' at the start if hovered on
+        if (hovered)
+            printf(ANSI_COL(" > ", "34"));
+        else
+            printf(ANSI_COL("   ", "94"));
+
+        // Numerate only if more than 1 option present (color if hovered)
+        if (choices > 1) {
+            if (hovered)
+                printf(ANSI_COL("%d. ", "34"), i + 1);
+            else
+                printf(ANSI_COL("%d. ", "94"), i + 1);
+        } 
+        
+        // The Option string (color if hovered)
+        if (hovered)
+            printf(ANSI_COL("%s", "34"), options[i]);
+        else
+            printf(ANSI_COL("%s", "94"), options[i]);
+
+        // Add '>' at the start if hovered on
+        if (hovered)
+            printf(ANSI_COL(" < ", "34"));
+        else
+            printf(ANSI_COL("   ", "94"));
+        
         // Right Border piece
         printf("\033[%d;%dH", i + 3, titleLength - 1);
         printf(ANSI_COL("##\n", "37;100"));
@@ -798,9 +945,12 @@ void handleGUI() {
                     case 1:// back to game
                         doneWithGUI = 1;
                     break;
-                    case 2:// restart
+                    case 2:;// restart
+                        char level[256];
+                        strcpy(level, loadedLevelName);
+                        log_info("Restarting level %s", level);
                         unloadGame();
-                        loadGame(loadedLevelName);
+                        loadGame(level);
                         doneWithGUI = 1;
                     break;
                     case 3:// quit
@@ -812,13 +962,13 @@ void handleGUI() {
                             if (submitGUI) {
                                 submitGUI = 0;
                                 switch (cursorGUI) {
-                                    case 1:;
-                                        //char playerName[64];
-                                        // TODO: Request a player-name
-                                        //playerName = "saved.bin";
+                                    case 1:;// save quit
                                         char savePath[256];
-                                        sprintf(savePath, ONGOING_FOLDER, "saved.bin");
+                                        char* playerName = getStringInput("Players name: ");
+                                        sprintf(savePath, GAMES_FOLDER"/%s/"ONGOING_FOLDER"/%s.bin", loadedLevelName, playerName);
+                                        free(playerName);
                                         log_info("User opted to save the game.");
+                                        log_info(savePath);
                                         if (saveData(savePath, movesMade, moveSequence)) {
                                             printf("\nGame saved successfully!\n");
                                             log_info("Success; saved %d moves", movesMade);
@@ -827,47 +977,23 @@ void handleGUI() {
                                             log_error("Failed to save game data to file.");
                                         }
                                         log_info("Player quit and save the game through pause menu.");
+                                        unloadGame();
+                                        fetchLocalData();
                                         doneWithQuit = 1;
                                         doneWithGUI = 1;
                                     break;
-                                    case 2:
+                                    case 2:// quit no save
                                         log_info("Player quit the game through pause menu (no save).");
                                         unloadGame();
-                                        isGameLoaded = 0;
-                                        loadedLevelName = NULL;
                                         doneWithQuit = 1;
                                         doneWithGUI = 1;
                                     break;
-                                    case 3:
+                                    case 3:// cancel
                                         doneWithQuit = 1;
                                     break;
                                 }
                             }
                         }
-#pragma region a
-                        //TODO: prompt to save
-                        /*
-                        printf("\nExiting.\n\nWould you like to save your progress? Y/N\n");
-                        log_info("User opted to quit the game.");
-                        // Prompt user to save progress
-                        char saveInput = 0;
-                        while (saveInput != 'y' && saveInput != 'n') {
-                            saveInput = getch_portable();
-                        }
-
-                        // Save game state
-                        if (saveInput == 'y') {
-                            log_info("User opted to save the game.");
-                            if (saveData(SAVE_FILE, movesMade, moveSequence)) {
-                                printf("\nGame saved successfully!\n");
-                                log_info("Success; saved %d moves", movesMade);
-                            } else {
-                                printf("\nFailed to save game.\n");
-                                log_error("Failed to save game data to file.");
-                            }
-                        }
-                        exit(0);*/
-#pragma endregion
                     break;
                 }
             }
@@ -875,16 +1001,16 @@ void handleGUI() {
         } else {
             renderGUI(7, 4, "MAIN MENU", (char*[]){"Continue", "New Game", "Leaderboard", "Quit"});
             if (awaitInputGUI(1)) break;
-            if (submitGUI){
+            if (submitGUI) {
                 submitGUI = 0;
-                switch (cursorGUI){
+                switch (cursorGUI) {
                     case 1:// continue
                         cursorGUI = 1;
                         int doneWithLevelSaveSelect = 0;
                         while (!doneWithLevelSaveSelect) {
                             renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
                             if (awaitInputGUI(1)) break;
-                            if (submitGUI){
+                            if (submitGUI) {
                                 submitGUI = 0;
                                 int levelIndex = cursorGUI - 1;
                                 if (ongoingGameCounts[levelIndex]) {
@@ -893,22 +1019,23 @@ void handleGUI() {
                                     while (!doneWithSaveSelect) {
                                         renderGUI(8, ongoingGameCounts[levelIndex], "SAVE SELECT", ongoingPlayerNames[levelIndex]);
                                         if (awaitInputGUI(1)) break;
-                                        if (submitGUI){
+                                        if (submitGUI) {
                                             submitGUI = 0;
                                             int saveIndex = cursorGUI - 1;
                                             loadGame(levelNames[levelIndex]);
-                                            loadMoves(ongoingPlayerNames[levelIndex][saveIndex]);
-                                            isGameLoaded = 1;
-                                            loadedLevelName = levelNames[levelIndex];
+                                            char fullSavePath[256];
+                                            sprintf(fullSavePath, GAMES_FOLDER"/%s/"ONGOING_FOLDER"/%s.bin", levelNames[levelIndex], ongoingPlayerNames[levelIndex][saveIndex]);
+                                            loadMoves(fullSavePath);
                                             doneWithSaveSelect = 1;
                                             doneWithLevelSaveSelect = 1;
                                             doneWithGUI = 1;
                                         }
                                     }
                                 } else {
-                                    // TODO: level has no ongoing playthroughs
-                                    printf("No ongoing games found.");
+                                    renderGUI(9, 1, "NOTE", (char*[]){"No ongoing games for this level!"});
                                     getch_portable();
+                                    CLEAR_SCREEN();
+
                                 }
                             }
                         }
@@ -919,12 +1046,10 @@ void handleGUI() {
                         while (!doneWithLevelNewSelect) {
                             renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
                             if (awaitInputGUI(1)) break;
-                            if (submitGUI){
+                            if (submitGUI) {
                                 submitGUI = 0;
                                 int levelIndex = cursorGUI - 1;
                                 loadGame(levelNames[levelIndex]);
-                                isGameLoaded = 1;
-                                loadedLevelName = levelNames[levelIndex];
                                 doneWithLevelNewSelect = 1;
                                 doneWithGUI = 1;
                             }
@@ -932,7 +1057,60 @@ void handleGUI() {
                     break;
                     case 3:// leaderboard
                         cursorGUI = 1;
-                        // render a gui with 4 choices but only 3 effective (next pg, prev pg, back, data<-SKIPPED/UNSELECTABLE)
+                        int doneWithLeaderboard = 0;
+                        while (!doneWithLeaderboard) {
+                            renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
+                            if (awaitInputGUI(1)) {
+                                doneWithLeaderboard = 1;
+                                break;
+                            }
+                            if (submitGUI) {
+                                submitGUI = 0;
+                                int levelIndex = cursorGUI - 1;
+                                int numFinished = finishedGameCounts[levelIndex];
+                                if (numFinished == 0) {
+                                    renderGUI(9, 1, "NOTE", (char*[]){"No finished games for this level!"});
+                                    getch_portable();
+                                    CLEAR_SCREEN();
+                                } else {
+                                    // Sort by moves count (ascending)
+                                    int* indices = (int*)malloc(numFinished * sizeof(int));
+                                    for (int i = 0; i < numFinished; i++) indices[i] = i;
+                                    for (int i = 0; i < numFinished - 1; i++) {
+                                        for (int j = 0; j < numFinished - i - 1; j++) {
+                                            if (finishedMovesCounts[levelIndex][indices[j]] > finishedMovesCounts[levelIndex][indices[j+1]]) {
+                                                int temp = indices[j];
+                                                indices[j] = indices[j+1];
+                                                indices[j+1] = temp;
+                                            }
+                                        }
+                                    }
+                                    // Create leaderboard options
+                                    char** leaderboardOptions = (char**)malloc(numFinished * sizeof(char*));
+                                    for (int i = 0; i < numFinished; i++) {
+                                        int idx = indices[i];
+                                        leaderboardOptions[i] = (char*)malloc(256 * sizeof(char));
+                                        sprintf(leaderboardOptions[i], "%s: %d moves", finishedPlayerNames[levelIndex][idx], finishedMovesCounts[levelIndex][idx]);
+                                    }
+                                    // Render leaderboard
+                                    cursorGUI = 1;
+                                    int doneWithLeaderboard = 0;
+                                    while (!doneWithLeaderboard) {
+                                        renderGUI(10, numFinished, "LEADERBOARD", leaderboardOptions);
+                                        // User can move around the leaderboard, but both submit and back will send back.
+                                        if (awaitInputGUI(1)) break;
+                                        if (submitGUI) {
+                                            submitGUI = 0;
+                                            cursorGUI = levelIndex + 1;
+                                            doneWithLeaderboard = 1;
+                                        }
+                                    }
+                                    for (int i = 0; i < numFinished; i++) free(leaderboardOptions[i]);
+                                    free(leaderboardOptions);
+                                    free(indices);
+                                }
+                            }
+                        }
                     break;
                     case 4:// quit
                         log_info("User quit the game");
@@ -948,9 +1126,11 @@ void handleGUI() {
 void handleGame() {
     if (isGameLoaded) {
         if (!victory){
-            handleInteractions();
             handleOutput();
+            printf(ANSI_COL("\nUse WASD to move, Q to quit.\n", "90"));
             handleInput();
+            if (atMenuGUI) return; // skip interactions if user went to GUI
+            handleInteractions();
         } else {
             // Victory animation
             int goalX = playerX;
@@ -974,7 +1154,7 @@ void handleGame() {
                         usleep(100000 / pow(lineLength, 16)); // spiral goes faster as it expands
                         map[playerR][goalY][goalX] = CHAR_GOAL;
                         handleOutput();
-                        printf("\n\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
+                        printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
                     }
                     if (dir == 1 || dir == 3) { // After Right or Left, increase line length
                         lineLength++;
@@ -984,6 +1164,31 @@ void handleGame() {
             // Wait for final input
             flushInput();
             getch_portable();
+
+            // Save finished game to leaderboard
+            char* playerName = getStringInput("Enter your name for the leaderboard: ");
+            // Sanitize playerName for filename
+            if (strlen(playerName) == 0) {
+                free(playerName);
+                playerName = strdup("Anonymous");
+            } else {
+                for (char *p = playerName; *p; p++) {
+                    if (*p == '/' || *p == '\\' || *p == ':' || *p == '*' || *p == '?' || *p == '"' || *p == '<' || *p == '>' || *p == '|') {
+                        *p = '_';
+                    }
+                }
+            }
+            char savePath[256];
+            sprintf(savePath, GAMES_FOLDER"/%s/"FINISHED_FOLDER"/%s.bin", loadedLevelName, playerName);
+            if (saveData(savePath, movesMade, moveSequence)) {
+                printf("\nScore saved to leaderboard!\n");
+                log_info("Finished game saved for %s", playerName);
+            } else {
+                printf("\nFailed to save score.\n");
+                log_error("Failed to save finished game.");
+            }
+            free(playerName);
+            fetchLocalData();
             unloadGame();
         }
         
@@ -1014,55 +1219,10 @@ int main() {
             handleGame();
         }
     }
-    
-    // TODO: prompt to select level
-    // TODO: add TITLE property to level
-    // Load level
-    //loadLevel();
-
-    // TODO: probably goes to trash
-    /*
-    if (findData(SAVE_FILE)) {
-        char loadInput = 0;
-        printf("\nSave file found! Continue? Y/N\n");
-
-        // Prompt user to load save
-        while (loadInput != 'y' && loadInput != 'n') {
-            loadInput = getch_portable();
-    }}*/
-
-        // TODO: loading piece here
-        /*
-        // Load game state
-        if (loadInput == 'y') {
-            
-        }
-        */
 
     CLEAR_SCREEN();
 
-    // Loop game until victory
-    /*while (!victory){
-        if (!atGUI) {
-            handleOutputGUI("Continue");
-            handleInputGUI();
-            printf(ANSI_COL("/--------------- ", "90;47")ANSI_COL("MAIN MENU", "34;47")ANSI_COL(" ---------------\\", "90;47"));
-        } else {
-            handleOutput();
-            printf("\n\nUse WASD to move, Q to quit.\n");
-            handleInput();
-            handleInteractions();
-        }
-    }*/
-
-    
-
-    //TODO: prompt to submit to leaderboard
-
-    
-
-    // Remove save file
-    // deleteData(SAVE_FILE);
+    printf("Good bye!");
 
     exit(0);
 }
