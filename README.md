@@ -4,20 +4,6 @@
 - The goal is to escape by moving around with W/A/S/D  
 - There are keys, doors and more
 
-## Features
-
-- [x] Render the maze and player
-- [x] Character movement with W/A/S/D
-- [x] Victory by reaching the goal
-- [x] Keys and doors
-- [x] Save file system
-- [x] Level file system
-- [x] ANSI Colors for extra accesibilty
-- [x] Multiple rooms
-- [x] Error logging
-- [x] Leaderboard
-- [x] Ability to swap between game/GUI anytime
-
 ## Usage
 
 ### Download ZIP
@@ -38,6 +24,20 @@ https://drive.google.com/file/d/1w70blVMbYh9AIksj3V2kWrj9H8n3YCmB/view?usp=shari
 4. Launch `game.exe` either through explorer or terminal
 5. ???
 6. Profit
+
+## Features
+
+- [x] Render the maze and player
+- [x] Character movement with W/A/S/D
+- [x] Victory by reaching the goal
+- [x] Keys and doors
+- [x] Save file system
+- [x] Level file system
+- [x] ANSI Colors for extra accesibilty
+- [x] Multiple rooms
+- [x] Error logging
+- [x] Leaderboard
+- [x] Ability to swap between game/GUI anytime
 
 ## Gameplay
 
