@@ -11,11 +11,13 @@
 - [x] Victory by reaching the goal
 - [x] Keys and doors
 - [x] Save file system
+- [x] Level file system
 - [x] ANSI Colors for extra accesibilty
 - [x] Multiple rooms
 - [x] Error logging
-- [ ] Leaderboard
-  
+- [x] Leaderboard
+- [x] Ability to swap between game/GUI anytime
+
 ## Usage
   
 1. Download source code
@@ -29,7 +31,7 @@
   
 ### Game Screen
 ```ansi
-Moves made:    0          Position:  8,  7,  0
+Moves made: 0     Position:  8,  7,  0
 
 ########################################
 ##  G o o d   L u c k   ##            ##
@@ -52,7 +54,6 @@ Moves made:    0          Position:  8,  7,  0
 ##                                    ##
 ########################################
 
-
 Use WASD to move, Q to quit.
 ```
   
@@ -73,20 +74,27 @@ Key:          o+
 - Goal is usually blocked by doors, which can be removed with key
 - Collect the key by stepping on it, and doors will unlock
 - Passages can bring player to other room
-- Quit using key `Q`
+- Enter `PAUSED` GUI with `Q`
   
 ## Save system
   
 > *Done playing before finishing?*  
 > *Not a problem*  
   
-Upon quitting you will be prompted  
-`Would you like to save your progress? Y/N`  
-If `Y` is pressed, game will be stored in a `save.bin` file.  
-  
-Upon launching the game again, you will be prompted  
-`Save file found! Continue? Y/N`  
-If `Y` is pressed, game will be restored.  
+Unfinished games of each level are stored in `./saves/games/<level_name>/ongoing/<player_name>`, while finished games are stored in `./saves/games/<level_name>/finished/<player_name>`, however those can't be loaded, and are only used for the leaderboard.
+
+### To save
+
+1. While in the game, hit `Q`
+2. In the `PAUSED` window select `Quit`
+3. In the `QUIT` window select `Save and quit`
+4. Input a player name for the save file.
+
+### To load
+
+1. While in the GUI, select `Continue`
+2. In `LEVEL SELECT` pick the level you've played before
+3. In `SAVE SELECT` select player name you inputted before
   
 ### Deterministic saving method
   
@@ -103,13 +111,23 @@ While technically it is possible to store players position, keys collected and e
 - No illegal placements if old file was used for a new map
 - I get to add a cool loading screen
 
+## Leaderboard system
+
+After completion, files will appear in `./saves/games/<level_name>/finished/<player_name>`  
+Their format is the same as save files, however, loading them would result in an instant win, so they are hidden from `CONTINUE` GUI, but rather appear in the `LEADERBOARD`.
+
+### To access the leaderboard:
+
+1. While in the GUI, select `Leaderboard`.
+2. In the `LEADERBOARD` select level you wish to see victories of.
+
 ## Level building
 
-File `level.dat` contains information about level.  
+File `tutorial.dat` contains information about level.  
 It can be edited with a text editor.  
 The way it works is explained inside.
 
-### level.dat
+### tutorial.dat
 ```ansi
 ; Welcome to level builder
 ; use unicode symbols to build levels
@@ -203,7 +221,7 @@ END
 ```
 
 ### Error handling
-- There must exist 1 `Start`
+- There must exist 1 `Start`, fatal error otherwise
 - Keys that didn't open any doors log warning
 - Passages that have no destination will cause non-fatal runtime error
 - If line count is not multiple of `WIDTH` last unfinished room will be truncated
