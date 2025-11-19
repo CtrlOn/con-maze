@@ -528,7 +528,7 @@ cleanup:
     exit(1);
 }
 
-void fetchLocalData() { // FIXME: handle case where saves folder is empty (causes crash atm)
+void fetchLocalData() {
     if (localDataLoaded) {
         // Free previously allocated memory
         for (int i = 0; i < levelCount; i++) {
@@ -1083,111 +1083,128 @@ void handleGUI() {
                 submitGUI = 0;
                 switch (cursorGUI) {
                     case 1:// continue
-                        cursorGUI = 1;
-                        int doneWithLevelSaveSelect = 0;
-                        while (!doneWithLevelSaveSelect) {
-                            renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
-                            if (awaitInputGUI(1)) break;
-                            if (submitGUI) {
-                                submitGUI = 0;
-                                int levelIndex = cursorGUI - 1;
-                                if (ongoingGameCounts[levelIndex]) {
-                                    cursorGUI = 1;
-                                    int doneWithSaveSelect = 0;
-                                    while (!doneWithSaveSelect) {
-                                        renderGUI(8, ongoingGameCounts[levelIndex], "SAVE SELECT", ongoingPlayerNames[levelIndex]);
-                                        if (awaitInputGUI(1)) break;
-                                        if (submitGUI) {
-                                            submitGUI = 0;
-                                            int saveIndex = cursorGUI - 1;
-                                            loadGame(levelNames[levelIndex]);
-                                            char fullSavePath[256];
-                                            sprintf(fullSavePath, GAMES_FOLDER"/%s/"ONGOING_FOLDER"/%s.bin", levelNames[levelIndex], ongoingPlayerNames[levelIndex][saveIndex]);
-                                            loadMoves(fullSavePath);
-                                            doneWithSaveSelect = 1;
-                                            doneWithLevelSaveSelect = 1;
-                                            doneWithGUI = 1;
+                        if (levelCount > 0) {
+                            cursorGUI = 1;
+                            int doneWithLevelSaveSelect = 0;
+                            while (!doneWithLevelSaveSelect) {
+                                renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
+                                if (awaitInputGUI(1)) break;
+                                if (submitGUI) {
+                                    submitGUI = 0;
+                                    int levelIndex = cursorGUI - 1;
+                                    if (ongoingGameCounts[levelIndex]) {
+                                        cursorGUI = 1;
+                                        int doneWithSaveSelect = 0;
+                                        while (!doneWithSaveSelect) {
+                                            renderGUI(8, ongoingGameCounts[levelIndex], "SAVE SELECT", ongoingPlayerNames[levelIndex]);
+                                            if (awaitInputGUI(1)) break;
+                                            if (submitGUI) {
+                                                submitGUI = 0;
+                                                int saveIndex = cursorGUI - 1;
+                                                loadGame(levelNames[levelIndex]);
+                                                char fullSavePath[256];
+                                                sprintf(fullSavePath, GAMES_FOLDER"/%s/"ONGOING_FOLDER"/%s.bin", levelNames[levelIndex], ongoingPlayerNames[levelIndex][saveIndex]);
+                                                loadMoves(fullSavePath);
+                                                doneWithSaveSelect = 1;
+                                                doneWithLevelSaveSelect = 1;
+                                                doneWithGUI = 1;
+                                            }
                                         }
+                                    } else {
+                                        renderGUI(9, 1, "NOTE", (char*[]){"No ongoing games for this level!"});
+                                        getch_portable();
+                                        CLEAR_SCREEN();
                                     }
-                                } else {
-                                    renderGUI(9, 1, "NOTE", (char*[]){"No ongoing games for this level!"});
-                                    getch_portable();
-                                    CLEAR_SCREEN();
-
                                 }
                             }
+                        } else {
+                            renderGUI(9, 1, "NOTE", (char*[]){"No levels found!"});
+                            getch_portable();
+                            CLEAR_SCREEN();
                         }
                     break;
                     case 2:// new game
-                        cursorGUI = 1;
-                        int doneWithLevelNewSelect = 0;
-                        while (!doneWithLevelNewSelect) {
-                            renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
-                            if (awaitInputGUI(1)) break;
-                            if (submitGUI) {
-                                submitGUI = 0;
-                                int levelIndex = cursorGUI - 1;
-                                loadGame(levelNames[levelIndex]);
-                                doneWithLevelNewSelect = 1;
-                                doneWithGUI = 1;
+                        if (levelCount > 0) {
+                            cursorGUI = 1;
+                            int doneWithLevelNewSelect = 0;
+                            while (!doneWithLevelNewSelect) {
+                                renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
+                                if (awaitInputGUI(1)) break;
+                                if (submitGUI) {
+                                    submitGUI = 0;
+                                    int levelIndex = cursorGUI - 1;
+                                    loadGame(levelNames[levelIndex]);
+                                    doneWithLevelNewSelect = 1;
+                                    doneWithGUI = 1;
+                                }
                             }
+                        } else {
+                            renderGUI(9, 1, "NOTE", (char*[]){"No levels found!"});
+                            getch_portable();
+                            CLEAR_SCREEN();
                         }
                     break;
                     case 3:// leaderboard
-                        cursorGUI = 1;
-                        int doneWithLeaderboard = 0;
-                        while (!doneWithLeaderboard) {
-                            renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
-                            if (awaitInputGUI(1)) {
-                                doneWithLeaderboard = 1;
-                                break;
-                            }
-                            if (submitGUI) {
-                                submitGUI = 0;
-                                int levelIndex = cursorGUI - 1;
-                                int numFinished = finishedGameCounts[levelIndex];
-                                if (numFinished == 0) {
-                                    renderGUI(9, 1, "NOTE", (char*[]){"No finished games for this level!"});
-                                    getch_portable();
-                                    CLEAR_SCREEN();
-                                } else {
-                                    // Sort by moves count (ascending)
-                                    int* indices = (int*)malloc(numFinished * sizeof(int));
-                                    for (int i = 0; i < numFinished; i++) indices[i] = i;
-                                    for (int i = 0; i < numFinished - 1; i++) {
-                                        for (int j = 0; j < numFinished - i - 1; j++) {
-                                            if (finishedMovesCounts[levelIndex][indices[j]] > finishedMovesCounts[levelIndex][indices[j+1]]) {
-                                                int temp = indices[j];
-                                                indices[j] = indices[j+1];
-                                                indices[j+1] = temp;
+                        if (levelCount > 0) {
+                            cursorGUI = 1;
+                            int doneWithLeaderboard = 0;
+                            while (!doneWithLeaderboard) {
+                                renderGUI(8, levelCount, "LEVEL SELECT", levelNames);
+                                if (awaitInputGUI(1)) {
+                                    doneWithLeaderboard = 1;
+                                    break;
+                                }
+                                if (submitGUI) {
+                                    submitGUI = 0;
+                                    int levelIndex = cursorGUI - 1;
+                                    int numFinished = finishedGameCounts[levelIndex];
+                                    if (numFinished == 0) {
+                                        renderGUI(9, 1, "NOTE", (char*[]){"No finished games for this level!"});
+                                        getch_portable();
+                                        CLEAR_SCREEN();
+                                    } else {
+                                        // Sort by moves count (ascending)
+                                        int* indices = (int*)malloc(numFinished * sizeof(int));
+                                        for (int i = 0; i < numFinished; i++) indices[i] = i;
+                                        for (int i = 0; i < numFinished - 1; i++) {
+                                            for (int j = 0; j < numFinished - i - 1; j++) {
+                                                if (finishedMovesCounts[levelIndex][indices[j]] > finishedMovesCounts[levelIndex][indices[j+1]]) {
+                                                    int temp = indices[j];
+                                                    indices[j] = indices[j+1];
+                                                    indices[j+1] = temp;
+                                                }
                                             }
                                         }
-                                    }
-                                    // Create leaderboard options
-                                    char** leaderboardOptions = (char**)malloc(numFinished * sizeof(char*));
-                                    for (int i = 0; i < numFinished; i++) {
-                                        int idx = indices[i];
-                                        leaderboardOptions[i] = (char*)malloc(256 * sizeof(char));
-                                        sprintf(leaderboardOptions[i], "%s: %d moves", finishedPlayerNames[levelIndex][idx], finishedMovesCounts[levelIndex][idx]);
-                                    }
-                                    // Render leaderboard
-                                    cursorGUI = 1;
-                                    int doneWithLeaderboard = 0;
-                                    while (!doneWithLeaderboard) {
-                                        renderGUI(10, numFinished, "LEADERBOARD", leaderboardOptions);
-                                        // User can move around the leaderboard, but both submit and back will send back.
-                                        if (awaitInputGUI(1)) break;
-                                        if (submitGUI) {
-                                            submitGUI = 0;
-                                            cursorGUI = levelIndex + 1;
-                                            doneWithLeaderboard = 1;
+                                        // Create leaderboard options
+                                        char** leaderboardOptions = (char**)malloc(numFinished * sizeof(char*));
+                                        for (int i = 0; i < numFinished; i++) {
+                                            int idx = indices[i];
+                                            leaderboardOptions[i] = (char*)malloc(256 * sizeof(char));
+                                            sprintf(leaderboardOptions[i], "%s: %d moves", finishedPlayerNames[levelIndex][idx], finishedMovesCounts[levelIndex][idx]);
                                         }
+                                        // Render leaderboard
+                                        cursorGUI = 1;
+                                        int doneWithLeaderboard = 0;
+                                        while (!doneWithLeaderboard) {
+                                            renderGUI(10, numFinished, "LEADERBOARD", leaderboardOptions);
+                                            // User can move around the leaderboard, but both submit and back will send back.
+                                            if (awaitInputGUI(1)) break;
+                                            if (submitGUI) {
+                                                submitGUI = 0;
+                                                cursorGUI = levelIndex + 1;
+                                                doneWithLeaderboard = 1;
+                                            }
+                                        }
+                                        for (int i = 0; i < numFinished; i++) free(leaderboardOptions[i]);
+                                        free(leaderboardOptions);
+                                        free(indices);
                                     }
-                                    for (int i = 0; i < numFinished; i++) free(leaderboardOptions[i]);
-                                    free(leaderboardOptions);
-                                    free(indices);
                                 }
                             }
+                        } else {
+                            renderGUI(9, 1, "NOTE", (char*[]){"No levels found!"});
+                            getch_portable();
+                            CLEAR_SCREEN();
                         }
                     break;
                     case 4:// quit
