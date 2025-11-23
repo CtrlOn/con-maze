@@ -922,6 +922,7 @@ retry:
             cursorGUI++;
         break;
         case ' ':
+        case '\n':
         case '\r':
         case 'y':
             submitGUI = 1;
@@ -943,7 +944,7 @@ retry:
     return esc;
 }
 
-void renderGUI(int padding, int choices, char* title, char **options/*, content*/) {
+void renderGUI(int padding, int choices, char* title, char **options) {
     HOME_CURSOR();
     HIDE_CURSOR();
     choicesGUI = choices;
@@ -1014,13 +1015,15 @@ void renderGUI(int padding, int choices, char* title, char **options/*, content*
     printf(ANSI_COL("##", "37;100"));
 
     // Info about usage
-    printf(ANSI_COL("\nUse W/S, arrows or numpad to navigate.", "90"));
-    printf(ANSI_COL("\nEnter to select.", "90"));
+    printf(ANSI_COL("\nNavigate with W/S or numbers", "90"));
+    printf(ANSI_COL("\nGo back with Q or Esc", "90"));
+    printf(ANSI_COL("\nSelect with Space or Return", "90"));
+    printf("\n"); // Move the blinking away from view
 
     SHOW_CURSOR();
 }
 
-void handleGUI() {
+void handleGUI() { // This is sort of sphaghetti by definition, because it contains all GUI branches
     CLEAR_SCREEN();
     cursorGUI = 1; // Default on "Back to game"/"Continue"
     int doneWithGUI = 0;
@@ -1258,7 +1261,7 @@ void handleGame() {
                             goalX += directions[dir][0];
                         if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
                             continue; // Skip out-of-bounds
-                        usleep(200000 / lineLength + 1); // spiral goes faster as it expands
+                        usleep(100000 / lineLength + 1); // spiral goes faster as it expands
                         map[playerR][goalY][goalX] = CHAR_GOAL;
                         handleOutput();
                         printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
@@ -1302,7 +1305,7 @@ void handleGame() {
     } else {
         // This screen should be unreachable, though exists for future refactoring
         CLEAR_SCREEN();
-        printf(ANSI_COL("Welcome to the\n", "90"));
+        printf(ANSI_COL("Make sure to use fullscreen.\n", "90"));
         printf(ASCII_LOGO);
         getch_portable();
         CLEAR_SCREEN();
@@ -1317,9 +1320,8 @@ int main() {
 
     // Check associated files
     fetchLocalData();
-    fetchLocalData();//FIXME: debug
 
-    // game loop until exit()
+    // game loop
     while (!quitting) {
         if (atMenuGUI){
             handleGUI();
@@ -1334,5 +1336,7 @@ int main() {
     // Good bye
     CLEAR_SCREEN();
     printf("Good bye!\n");
+    getch_portable();
+
     exit(0);
 }
