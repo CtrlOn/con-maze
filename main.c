@@ -1,5 +1,7 @@
-// Since usage of malloc/realloc is a requirement and maze game is deterministic, save system will work based on moves made. It will not save player's position neither know if player has collected the key
-
+#ifndef _WIN32
+#define _DEFAULT_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -148,8 +150,8 @@ int submitGUI = 0; // is user submission pending?
 // Game state variables
 int roomWidth;
 int roomCount;
-char*** map;
-int*** metadata;
+char*** map = NULL;
+int*** metadata = NULL;
 int playerX;
 int playerY;
 int playerR;
@@ -162,51 +164,13 @@ int loading = 0;
 
 // Locally loaded files
 int localDataLoaded = 0;
-int levelCount;
-char** levelNames;
-int* finishedGameCounts;
-char*** finishedPlayerNames;
-int** finishedMovesCounts;
-int* ongoingGameCounts;
-char*** ongoingPlayerNames;
-
-void cleanupLocalData() {
-    if (localDataLoaded) {
-        for (int i = 0; i < levelCount; i++) {
-            free(levelNames[i]);
-        }
-        free(levelNames);
-        free(finishedGameCounts);
-        for (int i = 0; i < levelCount; i++) {
-            if (finishedPlayerNames[i]) {
-                for (int j = 0; j < finishedGameCounts[i]; j++) {
-                    free(finishedPlayerNames[i][j]);
-                }
-                free(finishedPlayerNames[i]);
-            }
-        }
-        free(finishedPlayerNames);
-        if (finishedMovesCounts) {
-            for (int i = 0; i < levelCount; i++) {
-                if (finishedMovesCounts[i]) {
-                    free(finishedMovesCounts[i]);
-                }
-            }
-            free(finishedMovesCounts);
-        }
-        free(ongoingGameCounts);
-        for (int i = 0; i < levelCount; i++) {
-            if (ongoingPlayerNames[i]) {
-                for (int j = 0; j < ongoingGameCounts[i]; j++) {
-                    free(ongoingPlayerNames[i][j]);
-                }
-                free(ongoingPlayerNames[i]);
-            }
-        }
-        free(ongoingPlayerNames);
-        localDataLoaded = 0;
-    }
-}
+int levelCount = 0;
+char** levelNames = NULL;
+int* finishedGameCounts = NULL;
+char*** finishedPlayerNames = NULL;
+int** finishedMovesCounts = NULL;
+int* ongoingGameCounts = NULL;
+char*** ongoingPlayerNames = NULL;
 
 char* getStringInput(char* prompt) {
     printf("%s", prompt);
@@ -333,7 +297,7 @@ void loadGame(char* levelFile) {
     // Find BEGIN marker
     int in_rooms = 0;
     char **tileLines = NULL;
-    size_t tileCount = 0, tileCap = 0;
+    int tileCount = 0, tileCap = 0;
     while (fgets(line, sizeof(line), f)) {
         char *p = line;
         // Trim leading whitespace
@@ -400,17 +364,17 @@ void loadGame(char* levelFile) {
     for (int r = 0; r < roomCount; ++r) {
         // Collect metadata tokens for this room in order
         int *metaList = NULL;
-        size_t metaCount = 0, metaCap = 0;
+        int metaCount = 0, metaCap = 0;
 
         for (int i = 0; i < roomWidth; ++i) {
-            size_t idx = (size_t)r * roomWidth + i;
+            int idx = r * roomWidth + i;
             if (idx >= tileCount) break;
             char *lineptr = tileLines[idx];
-            size_t linelen = strlen(lineptr);
+            int linelen = strlen(lineptr);
             // first roomWidth characters are tile chars (pad with walls if short)
             int lowLength = 0;
             for (int j = 0; j < roomWidth; ++j) {
-                if ((size_t)j < linelen) {
+                if (j < linelen) {
                     map[r][i][j] = lineptr[j];
                 } else {
                     map[r][i][j] = CHAR_WALL;
@@ -421,7 +385,7 @@ void loadGame(char* levelFile) {
                 log_warn("Line %zu in room %d is shorter than WIDTH (%d). Padding with walls.", idx + 1, r, roomWidth);
             }
             // Parse trailing metadata tokens (if any) after first roomWidth chars
-            if (linelen > (size_t)roomWidth) {
+            if (linelen > roomWidth) {
                 char *metaStart = lineptr + roomWidth;
                 // Skip whitespace
                 while (*metaStart && isspace((unsigned char)*metaStart)) metaStart++;
@@ -439,7 +403,7 @@ void loadGame(char* levelFile) {
         }
 
         // Assign collected metadata sequentially to tiles that require metadata (row-major)
-        size_t metaIndex = 0;
+        int metaIndex = 0;
         for (int i = 0; i < roomWidth; ++i) {
             for (int j = 0; j < roomWidth; ++j) {
                 char ch = map[r][i][j];
@@ -485,7 +449,7 @@ void loadGame(char* levelFile) {
     }
 
     // Cleanup tileLines
-    for (size_t i = 0; i < tileCount; ++i) free(tileLines[i]);
+    for (int i = 0; i < tileCount; ++i) free(tileLines[i]);
     free(tileLines);
 
     loadedLevelName = strdup(levelFile);
@@ -528,41 +492,66 @@ cleanup:
     exit(1);
 }
 
-void fetchLocalData() {
+void fetchLocalData() {///FIXME: method is deeply fucked
     if (localDataLoaded) {
         // Free previously allocated memory
         for (int i = 0; i < levelCount; i++) {
             free(levelNames[i]);
+            levelNames[i] = NULL;
         }
         free(levelNames);
-        free(finishedGameCounts);
+        levelNames = NULL;
+
         for (int i = 0; i < levelCount; i++) {
             if (finishedPlayerNames[i]) {
-                for (int j = 0; j < finishedGameCounts[i]; j++) {
-                    free(finishedPlayerNames[i][j]);
+                int count = finishedGameCounts ? finishedGameCounts[i] : 0;
+                for (int j = 0; j < count; j++) {
+                    if (finishedPlayerNames[i][j]) {
+                        free(finishedPlayerNames[i][j]);
+                        finishedPlayerNames[i][j] = NULL;
+                    }
                 }
                 free(finishedPlayerNames[i]);
+                finishedPlayerNames[i] = NULL;
             }
         }
-        free(finishedPlayerNames);
+        if (finishedPlayerNames) {
+            free(finishedPlayerNames);
+            finishedPlayerNames = NULL;
+        }
+
         if (finishedMovesCounts) {
             for (int i = 0; i < levelCount; i++) {
                 if (finishedMovesCounts[i]) {
                     free(finishedMovesCounts[i]);
+                    finishedMovesCounts[i] = NULL;
                 }
             }
             free(finishedMovesCounts);
+            finishedMovesCounts = NULL;
         }
-        free(ongoingGameCounts);
+        free(finishedGameCounts);
+        finishedGameCounts = NULL;
+
         for (int i = 0; i < levelCount; i++) {
             if (ongoingPlayerNames[i]) {
-                for (int j = 0; j < ongoingGameCounts[i]; j++) {
-                    free(ongoingPlayerNames[i][j]);
+                int count = ongoingGameCounts ? ongoingGameCounts[i] : 0;
+                for (int j = 0; j < count; j++) {
+                    if (ongoingPlayerNames[i][j]) {
+                        free(ongoingPlayerNames[i][j]);
+                        ongoingPlayerNames[i][j] = NULL;
+                    }
                 }
                 free(ongoingPlayerNames[i]);
+                ongoingPlayerNames[i] = NULL;
             }
         }
-        free(ongoingPlayerNames);
+        if (ongoingPlayerNames) {
+            free(ongoingPlayerNames);
+            ongoingPlayerNames = NULL;
+        }
+        free(ongoingGameCounts);
+        ongoingGameCounts = NULL;
     }
 
     // Scan LEVELS_FOLDER for level files
@@ -1246,7 +1235,9 @@ void handleGame() {
                             goalX += directions[dir][0];
                         if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
                             continue; // Skip out-of-bounds
-                        usleep(100000 / pow(lineLength, 16)); // spiral goes faster as it expands
+                        int l = lineLength;
+                        l*=l; l*=l; l*=l; // Evade using pow(l, 8
+                        usleep(1000000 / l + 1); // spiral goes faster as it expands
                         map[playerR][goalY][goalX] = CHAR_GOAL;
                         handleOutput();
                         printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
@@ -1305,6 +1296,7 @@ int main() {
 
     // Check associated files
     fetchLocalData();
+    fetchLocalData();//FIXME: debug
 
     // game loop until exit()
     while (1) {
