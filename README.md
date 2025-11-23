@@ -6,24 +6,36 @@
 
 ## Usage
 
-### Download ZIP
+### Windows
 
-Download link for the lazy ones (Windows only)  
+#### Download ZIP
+> *for those who can't afford an open source compiler*
+
 https://drive.google.com/file/d/1w70blVMbYh9AIksj3V2kWrj9H8n3YCmB/view?usp=sharing  
   
 1. Download
 2. Extract
 3. Run game.exe
-4. Enjoy
 
-### Compile
+#### Compile
 
 1. Download source code
-2. Ensure there's `gcc` or `mingw` installed on your machine
+2. Ensure there's `mingw` installed on your machine
 3. Compile the code using `gcc main.c -o game.exe`
 4. Launch `game.exe` either through explorer or terminal
-5. ???
-6. Profit
+
+### Linux
+
+**Some distros/configurations might produce memory related crashes, some might not. Linux support is still in development**
+
+1. Download source code
+2. Ensure there's `gcc` installed on your machine (usually comes together with `build-essential` package
+3. Compile the code using `gcc main.c -o game.out`
+4. Launch `game.out` either through terminal
+
+### MacOS
+
+Nah  
 
 ## Features
 
