@@ -138,6 +138,7 @@ ANSI_COL("  //////    ///////   //      /// ", "96")ANSI_COL("      ", "97")ANSI
 #define TILE_SYMBOL         ANSI_COL("%c ", "90;40") // For text symbols
 
 // App state variables
+int quitting = 0; // did user quit app through GUI
 int atMenuGUI = 0; // is user in main menu?
 int isGameLoaded = 0; // is a game running?
 char* loadedLevelName;
@@ -630,7 +631,7 @@ void fetchLocalData() {
 
                 finishedPlayerNames[idx][fidx] = saveName;
 
-                char fullPath[256];
+                char fullPath[261]; // 256 + 5
                 sprintf(fullPath, "%s/%s.bin", finishedPath, saveName);
 
                 int loadedMoves;
@@ -676,7 +677,7 @@ void fetchLocalData() {
 
                 ongoingPlayerNames[idx][oidx] = saveName;
 
-                char fullPath[256];
+                char fullPath[261]; // 256 + 5
                 sprintf(fullPath, "%s/%s.bin", ongoingPath, saveName);
 
                 int loadedMoves;
@@ -1219,7 +1220,8 @@ void handleGUI() {
                     break;
                     case 4:// quit
                         log_info("User quit the game");
-                        exit(0);
+                        quitting = 1;
+                        doneWithGUI = 1;
                     break;
                 }
             }
@@ -1256,9 +1258,7 @@ void handleGame() {
                             goalX += directions[dir][0];
                         if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
                             continue; // Skip out-of-bounds
-                        int l = lineLength;
-                        l*=l; l*=l; l*=l; // Evade using pow(l, 8
-                        usleep(1000000 / l + 1); // spiral goes faster as it expands
+                        usleep(200000 / lineLength + 1); // spiral goes faster as it expands
                         map[playerR][goalY][goalX] = CHAR_GOAL;
                         handleOutput();
                         printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
@@ -1320,7 +1320,7 @@ int main() {
     fetchLocalData();//FIXME: debug
 
     // game loop until exit()
-    while (1) {
+    while (!quitting) {
         if (atMenuGUI){
             handleGUI();
         } else {
@@ -1328,8 +1328,11 @@ int main() {
         }
     }
 
+    // Free resources
+    freeLocalData();
+
     // Good bye
     CLEAR_SCREEN();
-    printf("Good bye!");
+    printf("Good bye!\n");
     exit(0);
 }

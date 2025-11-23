@@ -3,4 +3,9 @@ build
 *.exe
 *.bin
 *.log
+
 *.out
+main
+a
+maze
+game
