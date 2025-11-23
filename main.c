@@ -492,69 +492,79 @@ cleanup:
     exit(1);
 }
 
-void fetchLocalData() {///FIXME: method is deeply fucked
-    if (localDataLoaded) {
-        // Free previously allocated memory
+void freeLocalData() {
+    if (!localDataLoaded) return;
+
+    if (levelNames) {
         for (int i = 0; i < levelCount; i++) {
-            free(levelNames[i]);
-            levelNames[i] = NULL;
+            if (levelNames[i]) free(levelNames[i]);
         }
         free(levelNames);
         levelNames = NULL;
+    }
 
+    if (finishedPlayerNames) {
         for (int i = 0; i < levelCount; i++) {
             if (finishedPlayerNames[i]) {
                 int count = finishedGameCounts ? finishedGameCounts[i] : 0;
+
                 for (int j = 0; j < count; j++) {
                     if (finishedPlayerNames[i][j]) {
                         free(finishedPlayerNames[i][j]);
-                        finishedPlayerNames[i][j] = NULL;
                     }
                 }
-                free(finishedPlayerNames[i]);
-                finishedPlayerNames[i] = NULL;
-            }
-        }
-        if (finishedPlayerNames) {
-            free(finishedPlayerNames);
-            finishedPlayerNames = NULL;
-        }
 
-        if (finishedMovesCounts) {
-            for (int i = 0; i < levelCount; i++) {
-                if (finishedMovesCounts[i]) {
-                    free(finishedMovesCounts[i]);
-                    finishedMovesCounts[i] = NULL;
-                }
+                free(finishedPlayerNames[i]);
             }
-            free(finishedMovesCounts);
-            finishedMovesCounts = NULL;
         }
+        free(finishedPlayerNames);
+        finishedPlayerNames = NULL;
+    }
+
+    if (finishedMovesCounts) {
+        for (int i = 0; i < levelCount; i++) {
+            if (finishedMovesCounts[i]) {
+                free(finishedMovesCounts[i]);
+            }
+        }
+        free(finishedMovesCounts);
+        finishedMovesCounts = NULL;
+    }
+
+    if (finishedGameCounts) {
         free(finishedGameCounts);
         finishedGameCounts = NULL;
+    }
 
+    if (ongoingPlayerNames) {
         for (int i = 0; i < levelCount; i++) {
             if (ongoingPlayerNames[i]) {
                 int count = ongoingGameCounts ? ongoingGameCounts[i] : 0;
+
                 for (int j = 0; j < count; j++) {
                     if (ongoingPlayerNames[i][j]) {
                         free(ongoingPlayerNames[i][j]);
-                        ongoingPlayerNames[i][j] = NULL;
                     }
                 }
+
                 free(ongoingPlayerNames[i]);
-                ongoingPlayerNames[i] = NULL;
             }
         }
-        if (ongoingPlayerNames) {
-            free(ongoingPlayerNames);
-            ongoingPlayerNames = NULL;
-        }
+        free(ongoingPlayerNames);
+        ongoingPlayerNames = NULL;
+    }
+
+    if (ongoingGameCounts) {
         free(ongoingGameCounts);
         ongoingGameCounts = NULL;
     }
+}
 
-    // Scan LEVELS_FOLDER for level files
+void fetchLocalData() {
+    if (localDataLoaded) {
+        freeLocalData();
+    }
+
     DIR *dir = opendir(LEVELS_FOLDER);
     if (!dir) {
         log_error("Failed to open levels directory '%s'.", LEVELS_FOLDER);
@@ -565,33 +575,36 @@ void fetchLocalData() {///FIXME: method is deeply fucked
 
     struct dirent *entry;
     int count = 0;
+
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_name[0] == '.') continue; // Skip . and ..
+        if (entry->d_name[0] == '.') continue;
         count++;
     }
     closedir(dir);
 
     levelCount = count;
-    levelNames = (char**)malloc(levelCount * sizeof(char*));
-    finishedGameCounts = (int*)malloc(levelCount * sizeof(int));
-    finishedPlayerNames = (char***)malloc(levelCount * sizeof(char**));
-    finishedMovesCounts = (int**)malloc(levelCount * sizeof(int*));
-    ongoingGameCounts = (int*)malloc(levelCount * sizeof(int));
-    ongoingPlayerNames = (char***)malloc(levelCount * sizeof(char**));
 
-    // Reopen and collect level names and data
+    levelNames = calloc(levelCount, sizeof(char*));
+    finishedGameCounts = calloc(levelCount, sizeof(int));
+    finishedPlayerNames = calloc(levelCount, sizeof(char**));
+    finishedMovesCounts = calloc(levelCount, sizeof(int*));
+    ongoingGameCounts = calloc(levelCount, sizeof(int));
+    ongoingPlayerNames = calloc(levelCount, sizeof(char**));
+
     dir = opendir(LEVELS_FOLDER);
     int idx = 0;
+
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_name[0] == '.') continue;
+
         char* name = strdup(entry->d_name);
         char* dot = strrchr(name, '.');
         if (dot && strcmp(dot, ".dat") == 0) *dot = '\0';
         levelNames[idx] = name;
 
-        // Scan finished folder for this level
         char finishedPath[256];
         sprintf(finishedPath, GAMES_FOLDER"/%s/"FINISHED_FOLDER"/", name);
+
         DIR *fdir = opendir(finishedPath);
         if (fdir) {
             int fcount = 0;
@@ -601,20 +614,25 @@ void fetchLocalData() {///FIXME: method is deeply fucked
                 fcount++;
             }
             closedir(fdir);
+
             finishedGameCounts[idx] = fcount;
-            finishedPlayerNames[idx] = (char**)malloc(fcount * sizeof(char*));
-            finishedMovesCounts[idx] = (int*)malloc(fcount * sizeof(int));
+            finishedPlayerNames[idx] = calloc(fcount, sizeof(char*));
+            finishedMovesCounts[idx] = calloc(fcount, sizeof(int));
+
             fdir = opendir(finishedPath);
             int fidx = 0;
             while ((fentry = readdir(fdir)) != NULL) {
                 if (fentry->d_name[0] == '.') continue;
+
                 char* saveName = strdup(fentry->d_name);
                 char* dot = strrchr(saveName, '.');
                 if (dot && strcmp(dot, ".bin") == 0) *dot = '\0';
+
                 finishedPlayerNames[idx][fidx] = saveName;
-                // Load moves count
+
                 char fullPath[256];
                 sprintf(fullPath, "%s/%s.bin", finishedPath, saveName);
+
                 int loadedMoves;
                 char* loadedSeq;
                 if (loadData(fullPath, &loadedMoves, &loadedSeq)) {
@@ -624,17 +642,15 @@ void fetchLocalData() {///FIXME: method is deeply fucked
                     finishedMovesCounts[idx][fidx] = -1;
                     log_error("Failed to load moves for %s", fullPath);
                 }
+
                 fidx++;
             }
             closedir(fdir);
-        } else {
-            finishedGameCounts[idx] = 0;
-            finishedPlayerNames[idx] = NULL;
         }
 
-        // Scan ongoing folder for this level
         char ongoingPath[256];
         sprintf(ongoingPath, GAMES_FOLDER"/%s/"ONGOING_FOLDER"/", name);
+
         DIR *odir = opendir(ongoingPath);
         if (odir) {
             int ocount = 0;
@@ -644,19 +660,25 @@ void fetchLocalData() {///FIXME: method is deeply fucked
                 ocount++;
             }
             closedir(odir);
+
             ongoingGameCounts[idx] = ocount;
-            ongoingPlayerNames[idx] = (char**)malloc(ocount * sizeof(char*));
+            ongoingPlayerNames[idx] = calloc(ocount, sizeof(char*));
+
             odir = opendir(ongoingPath);
             int oidx = 0;
+
             while ((oentry = readdir(odir)) != NULL) {
                 if (oentry->d_name[0] == '.') continue;
+
                 char* saveName = strdup(oentry->d_name);
                 char* dot = strrchr(saveName, '.');
                 if (dot && strcmp(dot, ".bin") == 0) *dot = '\0';
+
                 ongoingPlayerNames[idx][oidx] = saveName;
-                // Load moves count
+
                 char fullPath[256];
                 sprintf(fullPath, "%s/%s.bin", ongoingPath, saveName);
+
                 int loadedMoves;
                 char* loadedSeq;
                 if (loadData(fullPath, &loadedMoves, &loadedSeq)) {
@@ -664,18 +686,17 @@ void fetchLocalData() {///FIXME: method is deeply fucked
                 } else {
                     log_error("Failed to load moves for %s", fullPath);
                 }
+
                 oidx++;
             }
+
             closedir(odir);
-        } else {
-            ongoingGameCounts[idx] = 0;
-            ongoingPlayerNames[idx] = NULL;
         }
 
         idx++;
     }
-    closedir(dir);
 
+    closedir(dir);
     localDataLoaded = 1;
 }
 
