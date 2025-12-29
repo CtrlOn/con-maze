@@ -1242,38 +1242,9 @@ void handleGame() {
             if (atMenuGUI) return; // skip interactions if user went to GUI
             handleInteractions();
         } else {
-            // Victory animation
-            int goalX = playerX;
-            int goalY = playerY;
-            int directions[4][2] = { {0, -1}, {1, 0}, {0, 1}, {-1, 0} }; // Up, Right, Down, Left
-            int dirIndex = 0;
-            int lineLength = 1;
-            playerX = playerY = -1; // Move player off map during animation
-            handleOutput();
-            int tileCount = roomWidth * roomWidth;
-            // Spiral around victory tile
-            while (lineLength <= roomWidth * 2) {
-                for (int dir = 0; dir < 4; dir++) {// For each direction
-                    for (int step = 0; step < lineLength; step++) { // For each step in that direction
-                        if (dir == 0 || dir == 2) // Up or Down
-                            goalY += directions[dir][1];
-                        else // Right or Left
-                            goalX += directions[dir][0];
-                        if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
-                            continue; // Skip out-of-bounds
-                        usleep(100000 / lineLength + 1); // spiral goes faster as it expands
-                        map[playerR][goalY][goalX] = CHAR_GOAL;
-                        handleOutput();
-                        printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
-                    }
-                    if (dir == 1 || dir == 3) { // After Right or Left, increase line length
-                        lineLength++;
-                    }
-                }
-            }
-            // Wait for final input
-            flushInput();
-            getch_portable();
+            animateVictory();
+            flushInput(); // Flush any input possibly made during animation
+            getch_portable(); // Wait for final input
 
             // Save finished game to leaderboard
             char* playerName = getStringInput("Enter your name for the leaderboard: ");
@@ -1310,6 +1281,37 @@ void handleGame() {
         getch_portable();
         CLEAR_SCREEN();
         atMenuGUI = 1;
+    }
+}
+
+void animateVictory() {
+    int goalX = playerX;
+    int goalY = playerY;
+    int directions[4][2] = { {0, -1}, {1, 0}, {0, 1}, {-1, 0} }; // Up, Right, Down, Left
+    int dirIndex = 0;
+    int lineLength = 1;
+    playerX = playerY = -1; // Move player off map during animation
+    handleOutput();
+    int tileCount = roomWidth * roomWidth;
+    // Spiral around victory tile
+    while (lineLength <= roomWidth * 2) {
+        for (int dir = 0; dir < 4; dir++) {// For each direction
+            for (int step = 0; step < lineLength; step++) { // For each step in that direction
+                if (dir == 0 || dir == 2) // Up or Down
+                    goalY += directions[dir][1];
+                else // Right or Left
+                    goalX += directions[dir][0];
+                if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
+                    continue; // Skip out-of-bounds
+                usleep(100000 / lineLength + 1); // spiral goes faster as it expands
+                map[playerR][goalY][goalX] = CHAR_GOAL;
+                handleOutput();
+                printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
+            }
+            if (dir == 1 || dir == 3) { // After Right or Left, increase line length
+                lineLength++;
+            }
+        }
     }
 }
 
