@@ -3,6 +3,7 @@ build
 *.exe
 *.bin
 *.log
+*.o
 
 *.out
 main
