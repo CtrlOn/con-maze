@@ -16,14 +16,14 @@ Make sure to resize console to fit entire game, otherwise visual artifacts might
 
 1. Download source code
 2. Ensure there's `mingw` installed on your machine
-3. Compile the code using `gcc main.c -o game.exe`
+3. Compile the code using `gcc *.c -o game.exe`
 4. Launch `game.exe` either through explorer or terminal
 
 #### Linux
 
 1. Download source code
 2. Ensure there's `gcc` installed on your machine (usually comes together with `build-essential` package
-3. Compile the code using `gcc main.c -o game.out`
+3. Compile the code using `gcc *.c -o game.out`
 4. Launch `game.out` through terminal
 
 ## Features
