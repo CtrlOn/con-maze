@@ -1,11 +1,11 @@
-# Ignore vscode extension garbage
+# VSCode extensions garbage
 .vscode/
 
-# Ignore compiled files
+# Compiled files
 obj/
 *.o
 
-# Ignore build files
+# Build files
 build/
 *.out
 main
@@ -14,9 +14,9 @@ maze
 game
 *.exe
 
-# Ignore program data files
+# Program data files
 *.bin
 *.log
 
-# Ignore unit test files
-unit_tests/
+# Tests temporary files and artifacts
+tests/
