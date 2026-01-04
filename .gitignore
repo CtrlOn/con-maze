@@ -1,12 +1,22 @@
-build
-.vscode
-*.exe
-*.bin
-*.log
+# Ignore vscode extension garbage
+.vscode/
+
+# Ignore compiled files
+obj/
 *.o
 
+# Ignore build files
+build/
 *.out
 main
 a
 maze
 game
+*.exe
+
+# Ignore program data files
+*.bin
+*.log
+
+# Ignore unit test files
+unit_tests/
