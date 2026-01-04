@@ -1,19 +1,4 @@
-#ifndef _WIN32
-#define _DEFAULT_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <ctype.h>
-#include <math.h>
-#include <dirent.h>
-#ifdef _WIN32
-#include <direct.h>
-#else
-#include <sys/stat.h>
-#endif
+#include "platform.h"
 #include "binio.h"
 #include "loglib.h"
 
@@ -22,62 +7,6 @@
 #define ONGOING_FOLDER "ongoing"
 #define LEVELS_FOLDER "saves/levels"
 
-// Macro for ANSI escape codes
-#define ANSI_COL(text, code) "\x1B[" code "m" text "\x1B[0m"
-
-#define HIDE_CURSOR() printf("\033[?25l")
-#define SHOW_CURSOR() printf("\033[?25h")
-
-// Clear screen and getch portable implementations
-#ifdef _WIN32
-#include <conio.h>
-#include <windows.h>
-
-// usleep replacement for Windows
-static inline int usleep(unsigned int usec) {
-    Sleep((usec + 999) / 1000);
-    return 0;
-}
-
-#define CLEAR_SCREEN() system("cls")
-char getch_portable() {
-    return getch();
-}
-
-// move cursor to top-left using ANSI sequence (requires VT mode on Windows)
-#define HOME_CURSOR() printf("\033[H")
-
-// Drain pending console input using the Windows API.
-static void flushInput(void) {
-    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
-}
-
-#else // POSIX
-#include <termios.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#define CLEAR_SCREEN() printf("\033[2J\033[H")
-// move cursor to top-left (no clear)
-#define HOME_CURSOR() printf("\033[H")
-char getch_portable() {
-    struct termios oldt, newt;
-    char ch;
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    ch = getchar();
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-    return ch;
-}
-
-// Drain pending stdin bytes using tcflush (portable POSIX).
-static void flushInput(void) {
-    tcflush(STDIN_FILENO, TCIFLUSH);
-}
-#endif
 
 #define ASCII_LOGO \
 ANSI_COL("   ######    #######   ####     ##", "96")ANSI_COL("      ", "97")ANSI_COL(" ####     ####     ##     ######## ########\n", "94") \
@@ -1233,6 +1162,37 @@ void handleGUI() { // This is sort of sphaghetti by definition, because it conta
     atMenuGUI = 0;
 }
 
+void animateVictory() {
+    int goalX = playerX;
+    int goalY = playerY;
+    int directions[4][2] = { {0, -1}, {1, 0}, {0, 1}, {-1, 0} }; // Up, Right, Down, Left
+    int dirIndex = 0;
+    int lineLength = 1;
+    playerX = playerY = -1; // Move player off map during animation
+    handleOutput();
+    int tileCount = roomWidth * roomWidth;
+    // Spiral around victory tile
+    while (lineLength <= roomWidth * 2) {
+        for (int dir = 0; dir < 4; dir++) {// For each direction
+            for (int step = 0; step < lineLength; step++) { // For each step in that direction
+                if (dir == 0 || dir == 2) // Up or Down
+                    goalY += directions[dir][1];
+                else // Right or Left
+                    goalX += directions[dir][0];
+                if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
+                    continue; // Skip out-of-bounds
+                usleep(100000 / lineLength + 1); // spiral goes faster as it expands
+                map[playerR][goalY][goalX] = CHAR_GOAL;
+                handleOutput();
+                printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
+            }
+            if (dir == 1 || dir == 3) { // After Right or Left, increase line length
+                lineLength++;
+            }
+        }
+    }
+}
+
 void handleGame() {
     if (isGameLoaded) {
         if (!victory){
@@ -1281,37 +1241,6 @@ void handleGame() {
         getch_portable();
         CLEAR_SCREEN();
         atMenuGUI = 1;
-    }
-}
-
-void animateVictory() {
-    int goalX = playerX;
-    int goalY = playerY;
-    int directions[4][2] = { {0, -1}, {1, 0}, {0, 1}, {-1, 0} }; // Up, Right, Down, Left
-    int dirIndex = 0;
-    int lineLength = 1;
-    playerX = playerY = -1; // Move player off map during animation
-    handleOutput();
-    int tileCount = roomWidth * roomWidth;
-    // Spiral around victory tile
-    while (lineLength <= roomWidth * 2) {
-        for (int dir = 0; dir < 4; dir++) {// For each direction
-            for (int step = 0; step < lineLength; step++) { // For each step in that direction
-                if (dir == 0 || dir == 2) // Up or Down
-                    goalY += directions[dir][1];
-                else // Right or Left
-                    goalX += directions[dir][0];
-                if (goalX < 0 || goalX >= roomWidth || goalY < 0 || goalY >= roomWidth)
-                    continue; // Skip out-of-bounds
-                usleep(100000 / lineLength + 1); // spiral goes faster as it expands
-                map[playerR][goalY][goalX] = CHAR_GOAL;
-                handleOutput();
-                printf("\nCongratulations! You've escaped the maze in %d moves!\n", movesMade);
-            }
-            if (dir == 1 || dir == 3) { // After Right or Left, increase line length
-                lineLength++;
-            }
-        }
     }
 }
 
