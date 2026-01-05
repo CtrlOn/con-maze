@@ -87,6 +87,8 @@ void freeLocalData(void) {
 }
 
 void fetchLocalData(void) {
+    // char* leak = malloc(1024); // Simulate memory leak
+
     if (localDataLoaded) {
         freeLocalData();
     }

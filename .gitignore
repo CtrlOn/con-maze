@@ -18,5 +18,5 @@ game
 *.bin
 *.log
 
-# Tests temporary files and artifacts
-tests/
+# Tests temporary files
+tests/tmp/
