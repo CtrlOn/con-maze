@@ -1,5 +1,7 @@
 @echo off
 
+if not exist src (cd ..)
+
 if not exist src (
     echo Please run this script from the project root directory - 'src' not found.
     pause
